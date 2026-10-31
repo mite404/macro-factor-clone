@@ -1,0 +1,7 @@
+services:
+  web:
+    command: npm run web -- --port 8082
+    port: 8082
+    portal:
+      url: /
+      title: Macro Factor web preview
