@@ -1,12 +1,11 @@
-/// <reference types="node" />
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 
-import { migrate, type Db } from '../../storage/migrations.ts';
+import { migrate } from '../../storage/migrations.ts';
+import { openTestDb as open } from '../../storage/testDb.ts';
 import {
   addDays,
   dayTotals,
@@ -18,18 +17,6 @@ import {
   updateEntry,
   type EntryForm,
 } from './diary.ts';
-
-// Real SQLite (Node's built-in) behind the same async surface the app gets from expo-sqlite.
-function open(path: string) {
-  const sqlite = new DatabaseSync(path);
-  const db: Db = {
-    execAsync: async (sql) => void sqlite.exec(sql),
-    runAsync: async (sql, params) => sqlite.prepare(sql).run(...params),
-    getAllAsync: async <T>(sql: string, params: (string | number | null)[]) =>
-      sqlite.prepare(sql).all(...params) as T[],
-  };
-  return { db, close: () => sqlite.close() };
-}
 
 const day = '2026-10-31';
 const form = (fields: Partial<EntryForm>): EntryForm => ({
@@ -75,7 +62,7 @@ test('logs, edits, deletes, and survives reopening the database', async () => {
   await migrate(db); // idempotent on an up-to-date database
   assert.deepEqual(
     (await listEntries(db, day)).map((e) => ({ ...e })),
-    [{ id: yogurt.id, day, label: 'Yogurt', calories: 200, protein: 17, carbs: 23, fat: 9 }],
+    [{ id: yogurt.id, day, label: 'Yogurt', calories: 200, protein: 17, carbs: 23, fat: 9, portion: null }],
   );
   close();
 });

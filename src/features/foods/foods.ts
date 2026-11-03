@@ -1,0 +1,124 @@
+import type { Db } from '../../storage/migrations';
+import { parseAmount, parseNutrition, type Nutrition, type NutritionForm, type Portion, type Unit } from '../diary/diary.ts';
+
+// Nutrition is per 100 of basis. A serving is a named, measured amount in that same unit.
+export type FoodInput = Nutrition & {
+  name: string;
+  basis: Unit;
+  serving: { name: string; amount: number } | null;
+  barcode: string | null; // digits as text; leading zeros are meaningful
+};
+export type Food = FoodInput & { id: number };
+
+export type FoodForm = NutritionForm & {
+  name: string;
+  basis: Unit;
+  servingName: string;
+  servingAmount: string;
+  barcode: string;
+};
+export type FoodFormErrors = Partial<Record<keyof FoodForm, string>>;
+
+const columns = `id, name, basis, calories, protein, carbs, fat,
+  serving_name AS servingName, serving_amount AS servingAmount, barcode`;
+const scale = (value: number | null, factor: number) => (value === null ? null : (value * factor) / 100);
+
+/** Validates food form text at the input boundary. */
+export function parseFoodForm(form: FoodForm): { food: FoodInput } | { errors: FoodFormErrors } {
+  const nutrition = parseNutrition(form);
+  const errors: FoodFormErrors = 'errors' in nutrition ? { ...nutrition.errors } : {};
+  const name = form.name.trim();
+  if (name === '') errors.name = 'Name is required';
+  const servingName = form.servingName.trim();
+  const servingAmount = parseAmount(form.servingAmount);
+  if (servingAmount === undefined || servingAmount === 0) errors.servingAmount = 'Enter an amount above 0';
+  else if (servingName === '' && servingAmount !== null) errors.servingName = 'Name this serving';
+  else if (servingName !== '' && servingAmount === null) errors.servingAmount = `Enter its amount in ${form.basis}`;
+  const barcode = form.barcode.trim();
+  if (!/^\d*$/.test(barcode)) errors.barcode = 'Use digits only';
+  if (Object.keys(errors).length > 0 || 'errors' in nutrition) return { errors };
+  return {
+    food: {
+      name,
+      basis: form.basis,
+      ...nutrition.nutrition,
+      serving: servingAmount ? { name: servingName, amount: servingAmount } : null,
+      barcode: barcode || null,
+    },
+  };
+}
+
+/**
+ * Snapshots `quantity` of a food, in its basis unit or in servings, as diary nutrition.
+ * Grams and millilitres never convert into each other: that needs density data a food lacks.
+ */
+export function logPortion(
+  food: Food,
+  quantity: number,
+  unit: Unit | 'serving',
+): { nutrition: Nutrition; portion: Portion } | { error: string } {
+  if (!(quantity > 0 && Number.isFinite(quantity))) return { error: 'Enter an amount above 0' };
+  if (unit === 'serving' && !food.serving) return { error: `${food.name} has no serving size` };
+  if (unit !== 'serving' && unit !== food.basis) {
+    return { error: `${food.name} is measured per 100 ${food.basis}; it has no ${unit} conversion` };
+  }
+  const amount = unit === 'serving' ? quantity * food.serving!.amount : quantity;
+  return {
+    nutrition: {
+      calories: scale(food.calories, amount)!,
+      protein: scale(food.protein, amount),
+      carbs: scale(food.carbs, amount),
+      fat: scale(food.fat, amount),
+    },
+    portion: { foodId: food.id, amount, unit: food.basis },
+  };
+}
+
+/** Saved, unarchived foods whose name contains `query` (case-insensitive), by name. Local only. */
+export async function searchFoods(db: Db, query: string): Promise<Food[]> {
+  const rows = await db.getAllAsync<Omit<Food, 'serving'> & { servingName: string | null; servingAmount: number | null }>(
+    `SELECT ${columns} FROM foods
+     WHERE archived = 0 AND name LIKE ? ESCAPE '\\'
+     ORDER BY name COLLATE NOCASE LIMIT 100`,
+    [`%${query.trim().replace(/[\\%_]/g, '\\$&')}%`],
+  );
+  // The schema keeps serving name and amount set together.
+  return rows.map(({ servingName, servingAmount, ...food }) => ({
+    ...food,
+    serving: servingName === null ? null : { name: servingName, amount: servingAmount! },
+  }));
+}
+
+function values(f: FoodInput) {
+  return [f.name, f.basis, f.calories, f.protein, f.carbs, f.fat, f.serving?.name ?? null, f.serving?.amount ?? null, f.barcode];
+}
+
+/**
+ * @returns The new food's id.
+ * @throws If the storage CHECK constraints reject the values.
+ */
+export async function insertFood(db: Db, f: FoodInput): Promise<number> {
+  const { lastInsertRowId } = await db.runAsync(
+    `INSERT INTO foods (name, basis, calories, protein, carbs, fat, serving_name, serving_amount, barcode)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    values(f),
+  );
+  return lastInsertRowId;
+}
+
+/**
+ * Changes how the food logs from now on. Diary entries keep their snapshots; provenance is untouched.
+ * @throws If the storage CHECK constraints reject the values.
+ */
+export async function updateFood(db: Db, id: number, f: FoodInput): Promise<void> {
+  await db.runAsync(
+    `UPDATE foods SET name = ?, basis = ?, calories = ?, protein = ?, carbs = ?, fat = ?,
+     serving_name = ?, serving_amount = ?, barcode = ? WHERE id = ?`,
+    [...values(f), id],
+  );
+}
+
+/** Hides a food from search. Diary entries logged from it stay as they are. */
+export async function archiveFood(db: Db, id: number): Promise<void> {
+  await db.runAsync('UPDATE foods SET archived = 1 WHERE id = ?', [id]);
+}
