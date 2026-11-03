@@ -27,7 +27,7 @@ export const EmptyDiary: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText('No entries for this day yet.')).toBeVisible();
-    await expect(canvas.getByLabelText('Total 0 kilocalories, protein 0 g, carbs 0 g, fat 0 g')).toBeVisible();
+    await expect(canvas.getByLabelText('Total 0 kilocalories, protein 0 g, fat 0 g, carbs 0 g')).toBeVisible();
   },
 };
 
@@ -40,26 +40,27 @@ export const PopulatedDiary: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(await canvas.findByText('350 kcal')).toBeVisible();
-    await expect(canvas.getByText('Protein ≥5 g')).toBeVisible();
+    await expect(await canvas.findByText('350')).toBeVisible();
+    await expect(canvas.getByText('≥5')).toBeVisible();
     await expect(canvas.getByText('Macro totals incomplete: 1 entry has unknown macros.')).toBeVisible();
-    await expect(canvas.getByText('P ? · C ? · F ? g')).toBeVisible();
+    await expect(canvas.getByText('200 kcal ? P ? F ? C')).toBeVisible();
   },
 };
 
 export const QuickAddValidationAndCorrection: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '+ Quick add' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Quick add' }));
     const calories = canvas.getByLabelText('Calories in kilocalories');
-    await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Log Food' }));
     await expect(canvas.getByRole('alert')).toHaveTextContent('Calories are required');
     await userEvent.type(calories, 'abc');
-    await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Log Food' }));
     await expect(canvas.getByRole('alert')).toHaveTextContent('Enter a number of 0 or more');
     await replace(calories, '250');
+    await expect(canvas.queryByRole('alert')).toBeNull();
     await userEvent.type(canvas.getByLabelText('Protein in grams'), '0');
-    await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Log Food' }));
     const entry = await canvas.findByRole('button', { name: /^Quick add, 250 kilocalories, protein 0, carbs \?, fat \?/ });
     await expect(canvas.getByText('Macro totals incomplete: 1 entry has unknown macros.')).toBeVisible();
 
@@ -75,7 +76,7 @@ export const QuickAddValidationAndCorrection: Story = {
 export const SavedFoodCreateAndLog: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '+ Log food' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Search for a food' }));
     await expect(await canvas.findByText(/^No saved foods yet/)).toBeVisible();
     await userEvent.type(canvas.getByLabelText('Search saved foods'), 'Greek yogurt');
     await userEvent.click(await canvas.findByRole('button', { name: 'New food' }));
@@ -88,7 +89,7 @@ export const SavedFoodCreateAndLog: Story = {
 
     await userEvent.type(await canvas.findByLabelText('Amount in grams'), '150');
     await expect(canvas.getByText('150 g: 184.5 kcal · P 12 · C ? · F ? g')).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: 'Log' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
     await expect(await canvas.findByRole('button', { name: /^Greek yogurt, 150 g, 184.5 kilocalories/ })).toBeVisible();
   },
 };
@@ -97,16 +98,15 @@ export const SavedFoodEditKeepsHistory: Story = {
   args: { onInit: seedYogurtLog },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '+ Log food' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Search for a food' }));
     await userEvent.type(canvas.getByLabelText('Search saved foods'), 'yog');
     await userEvent.click(await canvas.findByRole('button', { name: 'Greek yogurt, 123 kilocalories per 100 g' }));
-    await userEvent.click(canvas.getByRole('button', { name: 'Edit food' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit Food' }));
     await replace(canvas.getByLabelText('Calories per 100 grams'), '140');
     await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
     await userEvent.type(await canvas.findByLabelText('Amount in grams'), '100');
     await expect(canvas.getByText('100 g: 140 kcal · P 8 · C ? · F ? g')).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: 'Back to foods' }));
-    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Close logger' }));
     await expect(await canvas.findByRole('button', { name: /^Greek yogurt, 150 g, 184.5 kilocalories/ })).toBeVisible();
   },
 };
@@ -119,7 +119,7 @@ export const MeasuredServingWithKeyboard: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: '+ Log food' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Search for a food' }));
     await userEvent.click(await canvas.findByRole('button', { name: 'Orange juice, 45 kilocalories per 100 ml' }));
     const millilitres = canvas.getByRole('radio', { name: 'Millilitres' });
     const bottle = canvas.getByRole('radio', { name: 'Servings of bottle (330 ml)' });
@@ -130,7 +130,7 @@ export const MeasuredServingWithKeyboard: Story = {
     await expect(canvas.getByRole('radio', { name: 'Millilitres' })).not.toBeChecked();
     await userEvent.type(canvas.getByLabelText('Number of servings'), '2');
     await expect(canvas.getByText('660 ml: 297 kcal · P 4.6 · C 68.6 · F 1.3 g')).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: 'Log' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
     await expect(await canvas.findByRole('button', { name: /^Orange juice, 660 ml, 297 kilocalories/ })).toBeVisible();
   },
 };

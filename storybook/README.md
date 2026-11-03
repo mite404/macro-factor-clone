@@ -1,9 +1,14 @@
 # Storybook
 
-Storybook renders the production `App` from `src/App.tsx`, not a copy of it. Every story uses the
-same `DiaryScreen`, `FoodPanel`, and `src/ui.tsx` components that the iPhone build ships. Stories
-seed data with the production `insertEntry` and `insertFood` functions, then drive the real flows
-in play functions.
+The MacroFactor reference screens are the app's UI. Their component kit moved from
+`storybook/ui.tsx` to `src/ui.tsx`. `FoodLog`, `FoodSearch`, `QuickAdd`, `FoodDetail`, and
+`CreateFood` moved to `src/features/diary/LoggingScreens.tsx`, where fixtures became props and
+disabled buttons became callbacks. `src/features/diary/Diary.tsx` wires them to SQLite. The
+`App` stories render that production app.
+
+The other 11 references are under **Design references**. They show features that are not built
+yet, with fixture data only, and import the same `src/ui.tsx` kit. Inside the `DeviceFrame`
+context, `Phone` draws the phone outline and simulated status bar. The live app draws neither.
 
 ## Data isolation
 
@@ -23,7 +28,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens every story at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 17 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -41,29 +46,18 @@ adds dependencies and needs the owner's approval.
 | `SavedFoodCreateAndLog` | Empty search, create from the search text, validation, 150 g portion |
 | `SavedFoodEditKeepsHistory` | Edit food calories; the earlier diary snapshot stays 184.5 kcal |
 | `MeasuredServingWithKeyboard` | Per-100 ml food, Space selects the serving radio, 2 bottles = 660 ml |
+| `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
 
 These are browser checks of React Native Web. They do not verify native iOS layout, keyboard,
 VoiceOver, or expo-sqlite on the device. See `docs/ios-builds.md`.
 
 ## Design references for unbuilt features
 
-The earlier reference reconstructions of MacroFactor screens were removed. They were a second UI
-with fake controls. The useful parts now live in production: the input with a unit suffix
-(`Field` in `src/ui.tsx`) and the macro tints next to their text labels in the diary totals.
-
-These public sources remain design references for later tickets. They are links, not components.
-
-| Feature | Ticket | Source |
-| --- | --- | --- |
-| Food logging, search, barcode results | 05 to 07 | [Food logging tutorial][logging], [2026 press kit][press] |
-| Custom food photo capture | Later | [2026 annual report][report], [custom-food help][custom] |
-| Recipes | 08 | [2026 annual report][report] |
-| Targets compared with intake | 04 | [Nutrition product][product] |
-| Weight trend | 10 | [2026 press kit][press], [Nutrition product][product] |
-| Dashboard, timeline settings | Later | [2024 dashboard release][dashboard], [timeline help][timeline] |
-
-Adaptive coaching, expenditure estimates, and program updates are out of scope for this app. The
-plan sets manual targets only.
+`screens.stories.tsx` holds the source manifest with each public image URL. **Compare source**
+shows the original artwork beside each study. Later tickets reuse these designs: targets (04)
+for the dashboards, recipes (08) for the recipe screens, and weight history (10) for the trends.
+Adaptive coaching, expenditure estimates, and program updates stay design-only. The plan sets
+manual targets.
 
 [press]: https://macrofactor.com/press-kit/
 [product]: https://macrofactor.com/macrofactor/
