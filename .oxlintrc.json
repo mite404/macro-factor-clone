@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "react"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "no-unused-vars": ["warn", { "ignoreRestSiblings": true }],
+    // Screens load SQLite rows with `reload()` in an effect; the setState runs after an await.
+    "react/set-state-in-effect": "off"
+  },
+  "overrides": [
+    {
+      // wa-sqlite ships ambient declarations, not a module, so only a path reference loads them.
+      "files": ["storybook/wa-sqlite.d.ts"],
+      "rules": { "typescript/triple-slash-reference": "off" }
+    },
+    {
+      // Like expo-sqlite's provider, the stand-in opens its database once on mount.
+      "files": ["storybook/sqlite.tsx"],
+      "rules": { "react/exhaustive-deps": "off" }
+    }
+  ]
+}
