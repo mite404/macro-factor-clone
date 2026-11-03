@@ -7,6 +7,8 @@ Before delegating, read `.agents/pstack-models.md`. Its repository-specific assi
 global role defaults for the named work. Read the assigned ticket in `docs/tickets/` and the shared
 verification contract in `docs/implementation-plan.md`.
 
+Use vanilla Git for version control in this repository, not GitButler.
+
 Implement one ticket per thread. Integrate and verify prerequisites before starting dependent work.
 Keep native iOS acceptance separate from browser previews and portable SQLite tests. Linux cannot
 prove iPhone signing, native keyboard layout, VoiceOver, or camera behavior.
