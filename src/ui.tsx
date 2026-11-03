@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 
 export const colors = { text: '#1c1c1e', muted: '#5f5f66', line: '#d1d1d6', tint: '#0a63c9', danger: '#c4231c' };
 
-/** A 44-pt text button. `selected` makes it a toggle, such as a unit choice. */
+/** A 44-pt text button. `selected` makes it a radio option; put those in a radiogroup. */
 export function Button(props: {
   label: string;
   onPress: () => void;
@@ -15,12 +15,21 @@ export function Button(props: {
   const color = props.selected ? '#fff' : props.tone === 'danger' ? colors.danger : colors.tint;
   return (
     <Pressable
-      accessibilityRole="button"
+      // aria-* props: React Native maps them natively, and react-native-web ignores accessibilityState.
+      role={props.selected === undefined ? 'button' : 'radio'}
+      aria-checked={props.selected}
+      aria-disabled={!!props.disabled}
       accessibilityLabel={props.a11y ?? props.label}
       accessibilityHint={props.hint}
-      accessibilityState={{ disabled: !!props.disabled, selected: props.selected }}
       disabled={props.disabled}
       onPress={props.onPress}
+      // react-native-web presses on Space only for button roles; radios also check on Space.
+      onKeyDown={(e) => {
+        if (props.selected !== undefined && !props.disabled && e.nativeEvent.key === ' ') {
+          e.preventDefault();
+          props.onPress();
+        }
+      }}
       hitSlop={4}
       style={({ pressed }) => [
         ui.button,
