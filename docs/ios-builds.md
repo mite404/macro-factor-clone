@@ -3,6 +3,10 @@
 Target hardware: MacBook Pro M4 Pro and iPhone 12 Pro. These steps require the Mac, not the Linux
 orb. They are a runbook, not a record of a completed native build.
 
+The owner chose free Personal Team signing and accepted its seven-day renewal requirement on
+October 31, 2026. Use the local build path below, not EAS or the Expo Go TestFlight path. No paid
+Expo plan or Apple Developer Program membership is required for this local development workflow.
+
 ## Prepare the Mac
 
 Install Xcode from the Mac App Store, launch it, accept its license, and install its iOS components.
@@ -34,6 +38,10 @@ Free Personal Team provisioning expires after seven days. Rebuild/re-sign as req
 uninstall as a renewal shortcut because that can remove app data. Back up before signing or install
 changes. A paid developer membership is optional for this local workflow, not required by React
 Native.
+
+Keep the same bundle identifier and Personal Team when renewing. Install over the existing app,
+then confirm the diary data survived. Until backup/restore is implemented and verified, keep only
+disposable test data in this build.
 
 ## Evidence to record
 
