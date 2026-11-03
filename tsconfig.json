@@ -3,5 +3,9 @@
   "compilerOptions": {
     "strict": true,
     "allowImportingTsExtensions": true
-  }
+  },
+  "include": [
+    "**/*",
+    ".agents/**/*"
+  ]
 }

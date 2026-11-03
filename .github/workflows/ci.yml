@@ -28,6 +28,8 @@ jobs:
             run: npx tsc --version && npm run typecheck
           - name: SQLite tests
             run: npm test
+          - name: Nutrition history invariants
+            run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON .agents/skills/verifying-nutrition-history/scripts/check.ts
           - name: Metro iOS export
             run: npm run export:ios
     steps:
