@@ -5,3 +5,9 @@ services:
     portal:
       url: /
       title: Macro Factor web preview
+  storybook:
+    command: npm run storybook -- --ci
+    port: 6006
+    portal:
+      url: /
+      title: Nutrition Storybook (production screens)
