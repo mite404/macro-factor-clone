@@ -1,8 +1,8 @@
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View, type KeyboardTypeOptions } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
-import { Button, colors, ui } from '../../ui';
+import { Button, colors, Field, ui } from '../../ui';
 import { insertEntry, parseAmount, type Nutrition, type Unit } from '../diary/diary';
 import {
   archiveFood,
@@ -51,38 +51,6 @@ const formOf = (f: Food): FoodForm => ({
   barcode: f.barcode ?? '',
 });
 const logView = (food: Food): Step => ({ kind: 'log', food, quantity: '', unit: food.basis });
-
-function Field(props: {
-  label: string;
-  a11y?: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  error?: string;
-  placeholder?: string;
-  keyboardType?: KeyboardTypeOptions;
-  autoFocus?: boolean;
-}) {
-  return (
-    <View>
-      <Text style={ui.label}>{props.label}</Text>
-      <TextInput
-        accessibilityLabel={props.a11y ?? props.label}
-        style={[ui.input, props.error !== undefined && ui.inputError]}
-        value={props.value}
-        onChangeText={props.onChangeText}
-        placeholder={props.placeholder}
-        placeholderTextColor={colors.muted}
-        keyboardType={props.keyboardType}
-        autoFocus={props.autoFocus}
-      />
-      {props.error !== undefined && (
-        <Text accessibilityRole="alert" style={ui.error}>
-          {props.error}
-        </Text>
-      )}
-    </View>
-  );
-}
 
 /** Finds a saved food, creates or edits one, and logs a measured portion of it to `day`. */
 export default function FoodPanel(props: { day: string; onClose: () => void }) {
@@ -200,6 +168,7 @@ export default function FoodPanel(props: { day: string; onClose: () => void }) {
           }}
           keyboardType="decimal-pad"
           placeholder={unit === 'serving' ? '1' : '100'}
+          suffix={unit === 'serving' ? food.serving?.name : food.basis}
           autoFocus
         />
         {food.serving && (
@@ -265,7 +234,7 @@ export default function FoodPanel(props: { day: string; onClose: () => void }) {
         />
       ))}
       <Field label="Serving name, optional" value={form.servingName} onChangeText={setField('servingName')} error={errors.servingName} placeholder="cup, slice, bottle" />
-      <Field label={`Serving amount (${form.basis})`} a11y={`Serving amount in ${unitWord}`} value={form.servingAmount} onChangeText={setField('servingAmount')} error={errors.servingAmount} keyboardType="decimal-pad" placeholder={`Measured in ${form.basis}`} />
+      <Field label={`Serving amount (${form.basis})`} a11y={`Serving amount in ${unitWord}`} value={form.servingAmount} onChangeText={setField('servingAmount')} error={errors.servingAmount} keyboardType="decimal-pad" placeholder={`Measured in ${form.basis}`} suffix={form.basis} />
       <Field label="Barcode, optional" value={form.barcode} onChangeText={setField('barcode')} error={errors.barcode} keyboardType="number-pad" />
       {error !== '' && (
         <Text accessibilityRole="alert" style={ui.error}>

@@ -1,8 +1,8 @@
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Button, colors, ui } from '../../ui';
+import { Button, colors, Field, macroColors, ui } from '../../ui';
 import FoodPanel from '../foods/FoodPanel';
 import {
   addDays,
@@ -28,6 +28,12 @@ const numberFields = [
   ['protein', 'Protein', 'g'],
   ['carbs', 'Carbs', 'g'],
   ['fat', 'Fat', 'g'],
+] as const;
+
+const macroNames = [
+  ['protein', 'Protein'],
+  ['carbs', 'Carbs'],
+  ['fat', 'Fat'],
 ] as const;
 
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -127,9 +133,14 @@ export default function DiaryScreen() {
       <View style={styles.card} accessible accessibilityLabel={totalsLabel()}>
         <Text style={styles.big}>{round(totals.calories)} kcal</Text>
         <View style={styles.wrapRow}>
-          <Text style={styles.text}>Protein {formatMacro(totals.protein, entries.length)}</Text>
-          <Text style={styles.text}>Carbs {formatMacro(totals.carbs, entries.length)}</Text>
-          <Text style={styles.text}>Fat {formatMacro(totals.fat, entries.length)}</Text>
+          {macroNames.map(([key, name]) => (
+            <View key={key} style={styles.macro}>
+              <View style={[styles.swatch, { backgroundColor: macroColors[key] }]} />
+              <Text style={styles.text}>
+                {name} {formatMacro(totals[key], entries.length)}
+              </Text>
+            </View>
+          ))}
         </View>
         {incomplete > 0 && (
           <Text style={styles.warning}>
@@ -162,37 +173,26 @@ export default function DiaryScreen() {
               affect only this entry, not the food.
             </Text>
           )}
-          <Text style={styles.label}>Label</Text>
-          <TextInput
-            accessibilityLabel="Label"
-            style={styles.input}
+          <Field
+            label="Label"
             value={editing.form.label}
             onChangeText={setField('label')}
             placeholder="Quick add"
-            placeholderTextColor={colors.muted}
             returnKeyType="next"
             autoFocus={editing.id === null}
           />
           {numberFields.map(([key, label, unit]) => (
-            <View key={key}>
-              <Text style={styles.label}>
-                {label} ({unit}){key === 'calories' ? '' : ', optional'}
-              </Text>
-              <TextInput
-                accessibilityLabel={`${label} in ${unit === 'g' ? 'grams' : 'kilocalories'}`}
-                style={[styles.input, errors[key] && styles.inputError]}
-                value={editing.form[key]}
-                onChangeText={setField(key)}
-                keyboardType="decimal-pad"
-                placeholder={key === 'calories' ? 'Required' : 'Unknown'}
-                placeholderTextColor={colors.muted}
-              />
-              {errors[key] && (
-                <Text accessibilityRole="alert" style={styles.error}>
-                  {errors[key]}
-                </Text>
-              )}
-            </View>
+            <Field
+              key={key}
+              label={key === 'calories' ? label : `${label}, optional`}
+              a11y={`${label} in ${unit === 'g' ? 'grams' : 'kilocalories'}`}
+              suffix={unit}
+              value={editing.form[key]}
+              onChangeText={setField(key)}
+              error={errors[key]}
+              keyboardType="decimal-pad"
+              placeholder={key === 'calories' ? 'Required' : 'Unknown'}
+            />
           ))}
           {saveError !== '' && (
             <Text accessibilityRole="alert" style={styles.error}>
@@ -274,6 +274,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', color: colors.text, textAlign: 'center' },
   big: { fontSize: 34, fontWeight: '700', color: colors.text },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 4 },
+  macro: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  swatch: { width: 10, height: 10, borderRadius: 5 },
   warning: { fontSize: 15, color: '#8a5a00' },
   empty: { textAlign: 'center', paddingVertical: 24 },
   addRow: { flexDirection: 'row', justifyContent: 'center', gap: 16 },
