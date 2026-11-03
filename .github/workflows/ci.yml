@@ -40,3 +40,26 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: ${{ matrix.run }}
+
+  storybook:
+    name: Storybook build and browser flows
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      STORYBOOK_URL: http://localhost:6006
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Install agent-browser and Chromium
+        run: npm install -g agent-browser@0.38.1 && agent-browser install --with-deps
+      - run: npm run build-storybook
+      - name: Serve static Storybook
+        run: python3 -m http.server 6006 -d storybook-static >/tmp/storybook-http.log 2>&1 &
+      - name: Run story play functions in Chromium
+        run: |
+          curl -sf --retry 10 --retry-connrefused "$STORYBOOK_URL/index.json" >/dev/null
+          npm run test:storybook
