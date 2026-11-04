@@ -175,6 +175,20 @@ const mutants: Mutant[] = [
     to: "return row.barcode === gtin;\n  }).map(toFood);",
   },
   {
+    property: 'F1 food-record-fidelity',
+    why: 'an Open Food Facts gap is filled from another record in the reply',
+    file: lookup,
+    from: 'if (!isObject(n) || n.source_index !== energy.source_index) return null;',
+    to: 'if (!isObject(n)) return null;',
+  },
+  {
+    property: 'F1 food-record-fidelity',
+    why: 'a lookup with no USDA key never asks Open Food Facts, so nothing can be imported',
+    file: lookup,
+    from: "if (usda.kind !== 'not-found' && usda.kind !== 'missing-key') return usda;",
+    to: "if (usda.kind !== 'not-found') return usda;",
+  },
+  {
     property: 'X0 no-error',
     why: 'reopening reruns applied migrations',
     file: storage,

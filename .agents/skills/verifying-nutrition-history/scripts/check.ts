@@ -22,7 +22,7 @@ import {
   type Provenance,
 } from '../../../../src/features/foods/foods.ts';
 import { loadTargets, parseTargets, saveTargets, type Targets } from '../../../../src/features/goals/goals.ts';
-import { lookupBarcode, parseUsdaSearch } from '../../../../src/features/lookup/lookup.ts';
+import { lookupBarcode, parseUsdaSearch, type Lookup } from '../../../../src/features/lookup/lookup.ts';
 import { migrate, migrations, type Db } from '../../../../src/storage/migrations.ts';
 import { openTestDb } from '../../../../src/storage/testDb.ts';
 
@@ -99,6 +99,33 @@ const USDA_REPLY = {
     },
   ],
 };
+// An Open Food Facts import after a lookup with no USDA key. Its protein comes from another
+// record in the reply, so it must stay unknown rather than be merged in.
+const NUTELLA: Template = {
+  form: { ...blank, name: 'Nutella', basis: 'g', calories: '539', carbs: '57.5', fat: '30.9', servingName: 'serving', servingAmount: '15', barcode: '03017620422003' },
+  per100: { calories: 539, protein: null, carbs: 57.5, fat: 30.9 },
+  serving: { name: 'serving', amount: 15 },
+  barcode: '03017620422003', // as typed; Open Food Facts' code is 3017620422003
+};
+const NUTELLA_PROVENANCE: Provenance = { brand: 'Ferrero', source: { id: 'off:3017620422003', name: 'Open Food Facts', retrievedOn: TODAY } };
+const OFF_REPLY = {
+  code: '3017620422003', status: 'success', result: { id: 'product_found' },
+  product: {
+    code: '3017620422003', schema_version: 1003, product_name: 'Nutella', brands: 'Ferrero', serving_quantity: '15', serving_quantity_unit: 'g',
+    nutrition: {
+      aggregated_set: {
+        per: '100g', preparation: 'as_sold',
+        nutrients: {
+          'energy-kcal': { source: 'manufacturer', source_index: 0, unit: 'kcal', value: 539 },
+          carbohydrates: { source: 'manufacturer', source_index: 0, unit: 'g', value: 57.5 },
+          fat: { source: 'manufacturer', source_index: 0, unit: 'g', value: 30.9 },
+          proteins: { source: 'packaging', source_index: 2, unit: 'g', value: 30 },
+        },
+      },
+    },
+  },
+};
+const OFF_MISS = { code: '0077034085228', status: 'failure', result: { id: 'product_not_found' } };
 const RICE: Template = {
   form: { ...blank, name: 'Rice', basis: 'g', calories: '130', protein: '2.7', carbs: '28', fat: '0.3', servingName: 'bowl', servingAmount: '185' },
   per100: { calories: 130, protein: 2.7, carbs: 28, fat: 0.3 },
@@ -150,7 +177,11 @@ const ops: Op[] = [
     next: save(1, KARS, KARS_PROVENANCE),
   },
   {
-    name: 'lookup', slot: 1, words: `look up ${KARS_TYPED} again with no key and no network`,
+    name: 'importOff1', slot: 1, words: 'look up 03017620422003 with no USDA key, get an Open Food Facts reply whose protein is from another record, and save it as food 1',
+    next: save(1, NUTELLA, NUTELLA_PROVENANCE),
+  },
+  {
+    name: 'lookup', slot: 1, words: `look up ${KARS_TYPED} and 03017620422003 again with no key, and Open Food Facts without either`,
     next: (s) => ({ ...s, rejected: false }),
   },
   { name: 'edit0Bar', slot: 0, words: 'edit food 0 to Bar (0 kcal, all macros unknown, bar = 60 g)', next: edit(0, BAR) },
@@ -276,22 +307,41 @@ async function failedRestores(db: Db): Promise<void> {
 }
 
 // L1: saved foods with the same GTIN come back with no key read and no request; otherwise the
-// lookup falls through to the key, which is missing here.
+// lookup falls through to the key, which is missing here, and asks only Open Food Facts.
 async function compareLookup(db: Db, s: State): Promise<void> {
-  const expected = s.slots
-    .filter((x): x is NonNullable<Slot> => x !== null && !x.archived && x.t.barcode === KARS.barcode)
-    .map((x) => x.id);
-  const network = async (): Promise<Response> => {
-    throw new PropertyFailure({ property: 'L1 saved-barcode-offline', detail: 'the lookup made a request' });
+  const fail = (detail: string) => {
+    throw new PropertyFailure({ property: 'L1 saved-barcode-offline', detail });
   };
-  const result = await lookupBarcode(db, KARS_TYPED, async () => {
-    if (expected.length > 0) throw new PropertyFailure({ property: 'L1 saved-barcode-offline', detail: 'the lookup read the key' });
-    return null;
-  }, network);
-  const actual = result.kind === 'saved' ? result.foods.map((f) => f.id) : result.kind;
-  if (!isDeepStrictEqual(actual, expected.length > 0 ? expected : 'missing-key')) {
-    throw new PropertyFailure({ property: 'L1 saved-barcode-offline', detail: `expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(result)}` });
+  for (const [typed, t] of [[KARS_TYPED, KARS], ['3017620422003', NUTELLA]] as const) {
+    const expected = s.slots
+      .filter((x): x is NonNullable<Slot> => x !== null && !x.archived && x.t.barcode === t.barcode)
+      .map((x) => x.id);
+    const network = async (input: string | URL | Request): Promise<Response> => {
+      if (expected.length > 0 || !String(input).startsWith('https://world.openfoodfacts.org/')) fail(`the lookup requested ${String(input)}`);
+      return new Response(JSON.stringify(OFF_MISS), { status: 404 });
+    };
+    const result = await lookupBarcode(db, typed, async () => {
+      if (expected.length > 0) fail('the lookup read the key');
+      return null;
+    }, network);
+    const actual = result.kind === 'saved' ? result.foods.map((f) => f.id) : result;
+    if (!isDeepStrictEqual(actual, expected.length > 0 ? expected : { kind: 'missing-key', off: { kind: 'not-found' } })) {
+      fail(`${typed}: expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(result)}`);
+    }
   }
+}
+
+// Imports through lookupBarcode, as Diary.tsx does, with no key and only Open Food Facts reachable.
+async function importOff(db: Db): Promise<Food | null> {
+  const result: Lookup = await lookupBarcode(db, NUTELLA.barcode!, async () => null, async (input) => {
+    if (!String(input).startsWith('https://world.openfoodfacts.org/api/v3.5/product/')) throw new Error(`unexpected request ${String(input)}`);
+    return new Response(JSON.stringify(OFF_REPLY));
+  });
+  if (result.kind !== 'missing-key' || result.off?.kind !== 'off') {
+    throw new PropertyFailure({ property: 'F1 food-record-fidelity', detail: `Open Food Facts import found ${JSON.stringify(result)}` });
+  }
+  const id = await insertFood(db, result.off.food, result.off.food);
+  return { ...result.off.food, id };
 }
 
 function extraEntry(backup: Backup) {
@@ -329,6 +379,9 @@ async function apply(db: Db, op: Op, before: State, after: State): Promise<boole
     if (reply.kind !== 'usda') throw new Error(`USDA reply parsed as ${JSON.stringify(reply)}`);
     const id = await insertFood(db, reply.foods[0], reply.foods[0]);
     if (id !== slot!.id) throw new Error(`insertFood returned id ${id}, expected ${slot!.id}`);
+  } else if (op.name === 'importOff1') {
+    const food = await importOff(db);
+    if (food?.id !== slot!.id) throw new Error(`insertFood returned id ${food?.id}, expected ${slot!.id}`);
   } else if (op.name === 'lookup') {
     await compareLookup(db, before);
   } else if (op.name.startsWith('save')) {
