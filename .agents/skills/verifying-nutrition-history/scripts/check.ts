@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
 
 import { exportBackup, parseBackup, restoreBackup, type Backup } from '../../../../src/features/backup/backup.ts';
-import { deleteEntry, insertEntry, listEntries, parseEntryForm, updateEntry, type Entry } from '../../../../src/features/diary/diary.ts';
+import { deleteEntry, insertEntry, listEntries, localDay, parseEntryForm, updateEntry, type Entry } from '../../../../src/features/diary/diary.ts';
 import {
   archiveFood,
   insertFood,
@@ -16,16 +16,20 @@ import {
   parseFoodForm,
   searchFoods,
   updateFood,
+  parseGtin,
   type Food,
   type FoodForm,
+  type Provenance,
 } from '../../../../src/features/foods/foods.ts';
 import { loadTargets, parseTargets, saveTargets, type Targets } from '../../../../src/features/goals/goals.ts';
+import { lookupBarcode, parseUsdaSearch } from '../../../../src/features/lookup/lookup.ts';
 import { migrate, migrations, type Db } from '../../../../src/storage/migrations.ts';
 import { openTestDb } from '../../../../src/storage/testDb.ts';
 
 type Nut = { calories: number; protein: number | null; carbs: number | null; fat: number | null };
 type Template = { form: FoodForm; per100: Nut; serving: { name: string; amount: number } | null; barcode: string | null };
-type Slot = { id: number; t: Template; archived: boolean } | null;
+// A saved food's brand and source are set when it is saved and no edit changes them.
+type Slot = { id: number; t: Template; archived: boolean; provenance: Provenance } | null;
 type ExpectedEntry = Omit<Entry, 'id'>;
 type State = { slots: [Slot, Slot]; entries: ExpectedEntry[]; targets: Targets; saves: number; rejected: boolean };
 type Op = { name: string; words: string; slot: 0 | 1; next: (s: State) => State | null };
@@ -47,10 +51,10 @@ const SCRATCH = existsSync('/dev/shm') ? '/dev/shm' : tmpdir();
 // Blank means unknown (null); '0' means a known zero. Names are distinct so search order is total.
 const blank = { protein: '', carbs: '', fat: '', servingName: '', servingAmount: '', barcode: '' };
 const OATS: Template = {
-  form: { ...blank, name: 'Oats', basis: 'g', calories: '123', protein: '8', fat: '0', servingName: 'cup', servingAmount: '40', barcode: ' 0070 ' },
+  form: { ...blank, name: 'Oats', basis: 'g', calories: '123', protein: '8', fat: '0', servingName: 'cup', servingAmount: '40', barcode: ' 0036000291452 ' },
   per100: { calories: 123, protein: 8, carbs: null, fat: 0 },
   serving: { name: 'cup', amount: 40 },
-  barcode: '0070',
+  barcode: '0036000291452',
 };
 const JUICE: Template = {
   form: { ...blank, name: 'Juice', basis: 'ml', calories: '45', carbs: '10.4' },
@@ -65,10 +69,35 @@ const BAR: Template = {
   barcode: null,
 };
 const OAT_MILK: Template = {
-  form: { ...blank, name: 'Oat milk', basis: 'ml', calories: '46', protein: '1', fat: '1.5', barcode: '000123' },
+  form: { ...blank, name: 'Oat milk', basis: 'ml', calories: '46', protein: '1', fat: '1.5', barcode: '012345678905' },
   per100: { calories: 46, protein: 1, carbs: null, fat: 1.5 },
   serving: null,
-  barcode: '000123',
+  barcode: '012345678905',
+};
+// A USDA import: the decoy ranks first but has another GTIN; the match lists no fat, so fat is unknown.
+const KARS: Template = {
+  form: { ...blank, name: "NUT 'N BERRY MIX", basis: 'g', calories: '500', protein: '14.3', carbs: '42.9', servingName: '1 ONZ', servingAmount: '28', barcode: '0077034085228' },
+  per100: { calories: 500, protein: 14.3, carbs: 42.9, fat: null },
+  serving: { name: '1 ONZ', amount: 28 },
+  barcode: '0077034085228', // as typed, though USDA's record says 077034085228
+};
+const KARS_GTIN = '00077034085228';
+const KARS_TYPED = '0077034085228';
+const TODAY = localDay();
+const KARS_PROVENANCE: Provenance = { brand: "KAR'S", source: { id: 'fdc:2105222', name: 'USDA FoodData Central', retrievedOn: TODAY } };
+const MANUAL: Provenance = { brand: null, source: null };
+const USDA_REPLY = {
+  foods: [
+    { fdcId: 1, gtinUpc: '012345678905', description: 'Decoy', servingSizeUnit: 'g', foodNutrients: [{ nutrientId: 1008, unitName: 'KCAL', value: 1 }] },
+    {
+      fdcId: 2105222, gtinUpc: '077034085228', description: "NUT 'N BERRY MIX", brandName: "KAR'S", brandOwner: 'Kar Nut Products Company',
+      servingSize: 28, servingSizeUnit: 'g', householdServingFullText: '1 ONZ',
+      foodNutrients: [
+        { nutrientId: 1008, unitName: 'KCAL', value: 500 }, { nutrientId: 1003, unitName: 'G', value: 14.3 },
+        { nutrientId: 1005, unitName: 'G', value: 42.9 }, { nutrientId: 1093, unitName: 'MG', value: 0 },
+      ],
+    },
+  ],
 };
 const RICE: Template = {
   form: { ...blank, name: 'Rice', basis: 'g', calories: '130', protein: '2.7', carbs: '28', fat: '0.3', servingName: 'bowl', servingAmount: '185' },
@@ -92,8 +121,8 @@ const withSlot = (s: State, i: 0 | 1, slot: Slot): State => {
 };
 
 // The spec oracle: the state the app must reach, or null when the UI cannot reach the op.
-const save = (i: 0 | 1, t: Template) => (s: State) =>
-  s.slots[i] === null ? { ...withSlot(s, i, { id: s.saves + 1, t, archived: false }), saves: s.saves + 1 } : null;
+const save = (i: 0 | 1, t: Template, provenance = MANUAL) => (s: State) =>
+  s.slots[i] === null ? { ...withSlot(s, i, { id: s.saves + 1, t, archived: false, provenance }), saves: s.saves + 1 } : null;
 const edit = (i: 0 | 1, t: Template) => (s: State) => (live(s, i) ? withSlot(s, i, { ...s.slots[i]!, t }) : null);
 const archive = (i: 0 | 1) => (s: State) => (live(s, i) ? withSlot(s, i, { ...s.slots[i]!, archived: true }) : null);
 const log = (i: 0 | 1, quantity: number, unit: 'g' | 'ml' | 'serving') => (s: State) => {
@@ -114,8 +143,16 @@ const log = (i: 0 | 1, quantity: number, unit: 'g' | 'ml' | 'serving') => (s: St
   return { ...s, entries: [...s.entries, entry], rejected: false };
 };
 const ops: Op[] = [
-  { name: 'save0', slot: 0, words: 'save Oats (per 100 g, carbs unknown, fat 0, cup = 40 g, barcode 0070) as food 0', next: save(0, OATS) },
+  { name: 'save0', slot: 0, words: 'save Oats (per 100 g, carbs unknown, fat 0, cup = 40 g, barcode 0036000291452) as food 0', next: save(0, OATS) },
   { name: 'save1', slot: 1, words: 'save Juice (per 100 ml, protein and fat unknown, no serving) as food 1', next: save(1, JUICE) },
+  {
+    name: 'import1', slot: 1, words: `look up ${KARS_TYPED} in a USDA reply ranking a decoy first, and save the exact match as food 1`,
+    next: save(1, KARS, KARS_PROVENANCE),
+  },
+  {
+    name: 'lookup', slot: 1, words: `look up ${KARS_TYPED} again with no key and no network`,
+    next: (s) => ({ ...s, rejected: false }),
+  },
   { name: 'edit0Bar', slot: 0, words: 'edit food 0 to Bar (0 kcal, all macros unknown, bar = 60 g)', next: edit(0, BAR) },
   { name: 'edit0OatMilk', slot: 0, words: 'edit food 0 to Oat milk (basis g → ml, no serving)', next: edit(0, OAT_MILK) },
   { name: 'edit1Rice', slot: 1, words: 'edit food 1 to Rice (basis ml → g, bowl = 185 g)', next: edit(1, RICE) },
@@ -165,7 +202,7 @@ function compareEntries(expected: ExpectedEntry[], actual: Entry[]): Failure | n
 function compareFoods(s: State, actual: Food[]): Failure | null {
   const expected = s.slots
     .filter((x): x is NonNullable<Slot> => x !== null && !x.archived)
-    .map(({ id, t }): Food => ({ id, name: t.form.name, basis: t.form.basis, ...t.per100, serving: t.serving, barcode: t.barcode }))
+    .map(({ id, t, provenance }): Food => ({ id, name: t.form.name, basis: t.form.basis, ...t.per100, serving: t.serving, barcode: t.barcode, ...provenance }))
     .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
   if (isDeepStrictEqual(expected, actual.map((f) => ({ ...f })))) return null;
   const archived = s.slots.filter((x) => x?.archived).map((x) => x!.id);
@@ -178,13 +215,21 @@ function compareFoods(s: State, actual: Food[]): Failure | null {
 async function compareArchived(db: Db, s: State): Promise<Failure | null> {
   const expected = s.slots
     .filter((x): x is NonNullable<Slot> => x !== null && x.archived)
-    .map(({ id, t }) => ({ id, name: t.form.name, basis: t.form.basis, ...t.per100, serving: t.serving, barcode: t.barcode }))
+    .map(({ id, t, provenance }) => ({ id, name: t.form.name, basis: t.form.basis, ...t.per100, serving: t.serving, barcode: t.barcode, ...provenance }))
     .sort((a, b) => a.id - b.id);
-  const rows = await db.getAllAsync<Omit<Food, 'serving'> & { servingName: string | null; servingAmount: number | null }>(
-    `SELECT id, name, basis, calories, protein, carbs, fat, serving_name AS servingName, serving_amount AS servingAmount, barcode
+  type Row = Omit<Food, 'serving' | 'source'> & {
+    servingName: string | null; servingAmount: number | null; sourceId: string | null; sourceName: string | null; retrievedOn: string | null;
+  };
+  const rows = await db.getAllAsync<Row>(
+    `SELECT id, name, basis, calories, protein, carbs, fat, serving_name AS servingName, serving_amount AS servingAmount, barcode,
+     brand, source_id AS sourceId, source_name AS sourceName, retrieved_on AS retrievedOn
      FROM foods WHERE archived = 1 ORDER BY id`, [],
   );
-  const actual = rows.map(({ servingName, servingAmount, ...f }) => ({ ...f, serving: servingName === null ? null : { name: servingName, amount: servingAmount } }));
+  const actual = rows.map(({ servingName, servingAmount, sourceId, sourceName, retrievedOn, ...f }) => ({
+    ...f,
+    serving: servingName === null ? null : { name: servingName, amount: servingAmount },
+    source: sourceId === null ? null : { id: sourceId, name: sourceName, retrievedOn },
+  }));
   if (isDeepStrictEqual(expected, actual)) return null;
   return { property: 'F3 archived-food-kept', detail: `expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(actual)}` };
 }
@@ -230,6 +275,25 @@ async function failedRestores(db: Db): Promise<void> {
   if (after !== before) fail(`rows changed\n  before ${before}\n  after  ${after}`);
 }
 
+// L1: saved foods with the same GTIN come back with no key read and no request; otherwise the
+// lookup falls through to the key, which is missing here.
+async function compareLookup(db: Db, s: State): Promise<void> {
+  const expected = s.slots
+    .filter((x): x is NonNullable<Slot> => x !== null && !x.archived && x.t.barcode === KARS.barcode)
+    .map((x) => x.id);
+  const network = async (): Promise<Response> => {
+    throw new PropertyFailure({ property: 'L1 saved-barcode-offline', detail: 'the lookup made a request' });
+  };
+  const result = await lookupBarcode(db, KARS_TYPED, async () => {
+    if (expected.length > 0) throw new PropertyFailure({ property: 'L1 saved-barcode-offline', detail: 'the lookup read the key' });
+    return null;
+  }, network);
+  const actual = result.kind === 'saved' ? result.foods.map((f) => f.id) : result.kind;
+  if (!isDeepStrictEqual(actual, expected.length > 0 ? expected : 'missing-key')) {
+    throw new PropertyFailure({ property: 'L1 saved-barcode-offline', detail: `expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(result)}` });
+  }
+}
+
 function extraEntry(backup: Backup) {
   const id = Math.max(0, ...backup.diaryEntries.map((e) => e.id)) + 1;
   return { id, day: DAY, label: 'Extra', calories: 1, protein: null, carbs: null, fat: null, foodId: null, amount: null, unit: null };
@@ -257,6 +321,16 @@ async function apply(db: Db, op: Op, before: State, after: State): Promise<boole
     const parsed = parseTargets(op.name === 'setTargets' ? SET_TARGETS : EDIT_TARGETS);
     if ('errors' in parsed) throw new Error(`valid targets rejected: ${JSON.stringify(parsed.errors)}`);
     await saveTargets(db, parsed.targets);
+  } else if (op.name === 'import1') {
+    const code = parseGtin(KARS_TYPED);
+    if (!('gtin' in code) || code.gtin !== KARS_GTIN) throw new Error(`${KARS_TYPED} did not parse to ${KARS_GTIN}`);
+    const reply = parseUsdaSearch(USDA_REPLY, code.gtin, code.digits, TODAY);
+    // Saves the first offered record, so a decoy that slips through shows up as F1.
+    if (reply.kind !== 'usda') throw new Error(`USDA reply parsed as ${JSON.stringify(reply)}`);
+    const id = await insertFood(db, reply.foods[0], reply.foods[0]);
+    if (id !== slot!.id) throw new Error(`insertFood returned id ${id}, expected ${slot!.id}`);
+  } else if (op.name === 'lookup') {
+    await compareLookup(db, before);
   } else if (op.name.startsWith('save')) {
     const id = await insertFood(db, await parsedFood(after.slots[op.slot]!.t));
     if (id !== slot!.id) throw new Error(`insertFood returned id ${id}, expected ${slot!.id}`);
@@ -354,7 +428,7 @@ async function main() {
       }
     }
   }
-  console.log(`PASS H1 H2 H3 H4 F1 F2 F3 T1 B1 X0: ${runs} sequences of 1-${DEPTH} ops from ${ops.length}, 2 start states`);
+  console.log(`PASS H1 H2 H3 H4 F1 F2 F3 T1 L1 B1 X0: ${runs} sequences of 1-${DEPTH} ops from ${ops.length}, 2 start states`);
   console.log(`node ${process.version}, SQLite ${v}, ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 

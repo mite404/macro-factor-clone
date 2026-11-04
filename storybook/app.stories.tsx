@@ -5,9 +5,13 @@ import App from '../src/App';
 import { restoreBackup, type Backup } from '../src/features/backup/backup';
 import v1Backup from '../src/features/backup/backup-v1.json';
 import v2Backup from '../src/features/backup/backup-v2.json';
+import v3Backup from '../src/features/backup/backup-v3.json';
 import { insertEntry, localDay } from '../src/features/diary/diary';
 import { insertFood } from '../src/features/foods/foods';
 import { saveTargets } from '../src/features/goals/goals';
+import { deleteUsdaKey, saveUsdaKey } from '../src/features/lookup/key';
+import cheeriosReply from '../src/features/lookup/usda-search-cheerios.json';
+import karsReply from '../src/features/lookup/usda-search-kars.json';
 import type { Db } from '../src/storage/migrations';
 
 // Each story renders the production app on its own fresh in-memory SQLite database (see sqlite.tsx).
@@ -268,7 +272,7 @@ export const MeasuredServingWithKeyboard: Story = {
 };
 
 export const BackupExport: Story = {
-  args: { onInit: (db) => restoreBackup(db, v2Backup as Backup) },
+  args: { onInit: (db) => restoreBackup(db, v3Backup as Backup) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const downloads: Blob[] = [];
@@ -286,7 +290,7 @@ export const BackupExport: Story = {
     }
     const exported = JSON.parse(await downloads[0].text());
     await expect(Date.parse(exported.exportedAt)).not.toBeNaN();
-    await expect({ ...exported, exportedAt: v2Backup.exportedAt }).toEqual(v2Backup);
+    await expect({ ...exported, exportedAt: v3Backup.exportedAt }).toEqual(v3Backup);
     await expect(canvas.queryByRole('alert')).toBeNull();
   },
 };
@@ -325,7 +329,7 @@ export const BackupRestoreRejectsInvalidFiles: Story = {
     const dangling = { ...v1Backup, diaryEntries: [{ ...v1Backup.diaryEntries[1], foodId: 3 }] };
     const files: [string, string][] = [
       ['{"format": "nutrition-diary-backup",', 'This file is not valid JSON, so it cannot be a backup.'],
-      [JSON.stringify({ ...v2Backup, version: 3 }), 'This backup was made by a newer version of the app (format 3). Update the app to restore it.'],
+      [JSON.stringify({ ...v3Backup, version: 4 }), 'This backup was made by a newer version of the app (format 4). Update the app to restore it.'],
       [JSON.stringify(dangling), 'Diary entry 7 refers to food 3, which is not in the backup.'],
     ];
     for (const [text, reason] of files) {
@@ -388,5 +392,228 @@ export const BackupRestoreInProgressLocksNavigation: Story = {
     await expect(await canvas.findByText('Restored 2 saved foods (1 archived) and 3 diary entries on 2 days, 2026-10-30 to 2026-10-31.')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Back to food log' }));
     await expect(await canvas.findByText('No entries for this day yet.')).toBeVisible();
+  },
+};
+
+// USDA replies the next lookups get, in order, and the URLs requested. Other requests pass through.
+type Reply = (signal?: AbortSignal | null) => Promise<Response>;
+let usdaReplies: Reply[] = [];
+const usdaCalls: string[] = [];
+const json = (body: unknown, status = 200): Reply => async () => new Response(JSON.stringify(body), { status });
+const kars = karsReply.foods[0];
+const cheerios = cheeriosReply.foods[0];
+
+async function stubUsda(key: string | null, replies: Reply[]) {
+  await (key ? saveUsdaKey(key) : deleteUsdaKey());
+  usdaReplies = replies;
+  usdaCalls.length = 0;
+  const original = window.fetch.bind(window);
+  window.fetch = async (input, init) => {
+    if (!String(input).startsWith('https://api.nal.usda.gov/')) return original(input, init);
+    usdaCalls.push(String(input));
+    const reply = usdaReplies.shift();
+    if (!reply) throw new Error(`unexpected USDA request ${String(input)}`);
+    return reply(init?.signal);
+  };
+}
+
+async function lookUp(canvas: ReturnType<typeof within>, code: string) {
+  const input = await canvas.findByLabelText('Barcode digits');
+  await replace(input, code);
+  await userEvent.click(canvas.getByRole('button', { name: 'Look up barcode' }));
+}
+
+const savedKars = { name: "NUT 'N BERRY MIX", basis: 'g', calories: 500, protein: 14.3, carbs: 42.9, fat: 32.1, serving: { name: '1 ONZ', amount: 28 }, barcode: '077034085228' } as const;
+const karsSource = { brand: "KAR'S", source: { id: 'fdc:2105222', name: 'USDA FoodData Central', retrievedOn: '2026-11-03' } };
+
+export const BarcodeSavedFoodOffline: Story = {
+  args: {
+    onInit: async (db) => {
+      await insertFood(db, savedKars, karsSource);
+      await stubUsda(null, []);
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await expect(await canvas.findByText('Type a barcode')).toBeVisible();
+    await lookUp(canvas, '0 0770 34085 228');
+    await expect(await canvas.findByText('In your saved foods')).toBeVisible();
+    await expect(canvas.getByText('Found on this phone, so nothing was sent to USDA.')).toBeVisible();
+    await expect(usdaCalls).toEqual([]);
+    await userEvent.click(canvas.getByRole('button', { name: "NUT 'N BERRY MIX, KAR'S, 500 kilocalories per 100 g" }));
+    await expect(await canvas.findByText('Edits change only this saved copy, not past diary entries.')).toBeVisible();
+    await expect(canvas.getByText('USDA FoodData Central')).toBeVisible();
+    await expect(canvas.getByText('2026-11-03')).toBeVisible();
+    await expect(canvas.getByText('077034085228')).toBeVisible();
+  },
+};
+
+export const BarcodeUsdaReviewSaveAndRepeat: Story = {
+  args: { onInit: () => stubUsda('storybook-fake-key', [json({ foods: [cheerios, kars] })]) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Search for a food' }));
+    await userEvent.click(await canvas.findByRole('tab', { name: 'Barcode' }));
+    // Keyboard only: the field has focus, digits are typed, and Enter looks the code up.
+    const input = await canvas.findByLabelText('Barcode digits');
+    await waitFor(() => expect(input).toHaveFocus());
+    await userEvent.keyboard('0077034085228{Enter}');
+    await expect(await canvas.findByText('USDA FoodData Central')).toBeVisible();
+    await expect(canvas.queryByText(/Cheerios/)).toBeNull();
+    await expect(new URL(usdaCalls[0]).searchParams.get('query')).toBe('077034085228 0077034085228 00077034085228');
+    await expect(usdaCalls[0]).not.toContain('storybook-fake-key');
+
+    await userEvent.click(canvas.getByRole('button', { name: "NUT 'N BERRY MIX, KAR'S, 500 kilocalories per 100 g" }));
+    await expect(await canvas.findByText('Nothing is saved until you tap Save food.')).toBeVisible();
+    await expect(canvas.getByText('Per 100 g: 500 kcal · P 14.3 · C 42.9 · F 32.1 g')).toBeVisible();
+    await expect(canvas.getByText('1 ONZ (28 g)')).toBeVisible();
+    await expect(canvas.getByText('2105222, published 2021-10-28')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Back to barcode results' }));
+    await userEvent.click(await canvas.findByRole('button', { name: "NUT 'N BERRY MIX, KAR'S, 500 kilocalories per 100 g" }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Save food' }));
+
+    await userEvent.type(await canvas.findByLabelText('Amount in grams'), '28');
+    await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
+    await expect(await canvas.findByRole('button', { name: /^NUT 'N BERRY MIX, 28 g, 140 kilocalories/ })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Look up a barcode' }));
+    await lookUp(canvas, '077034085228');
+    await expect(await canvas.findByText('In your saved foods')).toBeVisible();
+    await expect(usdaCalls).toHaveLength(1);
+  },
+};
+
+export const BarcodeMultipleRecords: Story = {
+  args: {
+    onInit: () => stubUsda('storybook-fake-key', [json({ foods: [
+      kars,
+      { ...kars, fdcId: 999, gtinUpc: '00077034085228', publishedDate: '2024-03-01', description: "NUT 'N BERRY MIX, NEW RECIPE" },
+      { ...kars, fdcId: 7, foodNutrients: [{ nutrientId: 1008, unitName: 'KCAL', value: -5 }] },
+    ] })]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await lookUp(canvas, '077034085228');
+    await expect(await canvas.findByText('2 records have exactly this barcode, such as older and newer labels. Compare them and save the one on your package.')).toBeVisible();
+    await expect(canvas.getByText('USDA record 2105222, published 2021-10-28')).toBeVisible();
+    await expect(canvas.getByText('USDA record 999, published 2024-03-01')).toBeVisible();
+    await expect(canvas.getByText("1 more record was left out because the nutrition can't be used.")).toBeVisible();
+  },
+};
+
+export const BarcodeLookupErrors: Story = {
+  args: {
+    onInit: () => stubUsda(null, [
+      json({ error: { code: 'OVER_RATE_LIMIT' } }, 429),
+      async () => { throw new TypeError('Failed to fetch'); },
+      json({ error: { code: 'API_KEY_INVALID' } }, 403),
+      json({ totalHits: 0, foods: [] }),
+      json(cheeriosReply),
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await lookUp(canvas, '077034085229');
+    await expect(await canvas.findByRole('alert')).toHaveTextContent("The last digit doesn't match. Check each digit");
+    await lookUp(canvas, '77034085228');
+    await expect(await canvas.findByRole('alert')).toHaveTextContent('A barcode has 8, 12, 13, or 14 digits');
+
+    await lookUp(canvas, '077034085228');
+    await expect(await canvas.findByText('Not in your saved foods')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Open Settings' }));
+    const key = await canvas.findByLabelText('USDA API key');
+    await userEvent.type(key, 'storybook-fake-key');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save USDA key' }));
+    await expect(await canvas.findByText('Your USDA key is saved')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Back to barcode lookup' }));
+
+    const outcomes: [string, string][] = [
+      ["USDA's hourly limit is used up", 'Try again'],
+      ["Couldn't reach USDA", 'Try again'],
+      ['USDA rejected your key', 'Open Settings'],
+    ];
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up barcode' }));
+    for (const [title, action] of outcomes) {
+      await expect(await canvas.findByText(title)).toBeVisible();
+      await expect(canvas.getByRole('button', { name: 'Create food' })).toBeVisible();
+      if (action === 'Try again') await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
+    }
+    await lookUp(canvas, '077034085228');
+    await expect(await canvas.findByText('No USDA match')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Create food' }));
+    await expect(await canvas.findByLabelText('Barcode, optional')).toHaveValue('077034085228');
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
+    await lookUp(canvas, '016000275287');
+    await expect(await canvas.findByText("USDA's nutrition can't be used")).toBeVisible();
+    await expect(usdaCalls).toHaveLength(5);
+  },
+};
+
+export const BarcodeTimeoutRecovers: Story = {
+  args: {
+    onInit: () => stubUsda('storybook-fake-key', [
+      (signal) => new Promise((_, reject) => signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))),
+      json({ foods: [kars] }),
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await lookUp(canvas, '077034085228');
+    await expect(await canvas.findByText('Checking saved foods, then USDA…')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Look up barcode' })).toHaveAttribute('aria-disabled', 'true');
+    await expect(await canvas.findByText("USDA didn't answer", {}, { timeout: 12_000 })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
+    await expect(await canvas.findByText('One record has exactly this barcode. Open it to check the nutrition before saving.')).toBeVisible();
+  },
+};
+
+export const UsdaKeySettings: Story = {
+  args: { onInit: () => stubUsda(null, []) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Settings' }));
+    await expect(await canvas.findByText('Add your USDA key')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Save USDA key' }));
+    await expect(canvas.getByRole('alert')).toHaveTextContent('Paste the key from your api.data.gov email');
+    const key = canvas.getByLabelText('USDA API key');
+    await expect(key).toHaveAttribute('type', 'password');
+    await userEvent.type(key, 'storybook fake key');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save USDA key' }));
+    await expect(canvas.getByRole('alert')).toHaveTextContent("That isn't a key. Copy it again, without spaces");
+    await replace(key, 'storybook-fake-key');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save USDA key' }));
+    await expect(await canvas.findByText('Your USDA key is saved')).toBeVisible();
+    await expect(canvas.getByLabelText('USDA API key')).toHaveValue('');
+    await expect(canvasElement.textContent).not.toContain('storybook-fake-key');
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove USDA key' }));
+    await expect(await canvas.findByText('Key removed. Barcode lookup still finds your saved foods.')).toBeVisible();
+    await expect(canvas.getByText('Add your USDA key')).toBeVisible();
+  },
+};
+
+export const BarcodeLargeText: Story = {
+  args: { onInit: () => stubUsda('storybook-fake-key', [json({ foods: [kars] })]) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await lookUp(canvas, '077034085228');
+    await userEvent.click(await canvas.findByRole('button', { name: "NUT 'N BERRY MIX, KAR'S, 500 kilocalories per 100 g" }));
+    await expect(await canvas.findByText('Nothing is saved until you tap Save food.')).toBeVisible();
+    enlargeText(canvasElement);
+    // The shared macro summary wraps into fewer columns rather than cutting figures off.
+    await waitFor(() => {
+      for (const value of ['500', '14.3', '32.1', '42.9']) {
+        const el = canvas.getByText(value);
+        expect(el.scrollWidth, `${value} is cut off`).toBeLessThanOrEqual(el.clientWidth);
+      }
+    });
+    const save = canvas.getByRole('button', { name: 'Save food' });
+    const retrieved = canvas.getByText('Retrieved');
+    retrieved.scrollIntoView({ block: 'end' });
+    await waitFor(() => expect(retrieved.getBoundingClientRect().bottom).toBeLessThanOrEqual(save.getBoundingClientRect().top));
   },
 };

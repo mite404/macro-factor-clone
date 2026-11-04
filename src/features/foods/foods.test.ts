@@ -38,7 +38,7 @@ function valid(fields: Partial<FoodForm>) {
 }
 async function save(db: Parameters<typeof insertFood>[0], fields: Partial<FoodForm>): Promise<Food> {
   const input = valid(fields);
-  return { ...input, id: await insertFood(db, input) };
+  return { ...input, brand: null, source: null, id: await insertFood(db, input) };
 }
 async function log(db: Parameters<typeof insertFood>[0], food: Food, quantity: number, unit: Parameters<typeof logPortion>[2]) {
   const result = logPortion(food, quantity, unit);
@@ -101,6 +101,7 @@ test('rejects invalid foods and keeps unknown nutrients unknown', async () => {
   assert.ok('errors' in parseFoodForm(form({ servingAmount: '30' })), 'amount without serving name');
   assert.ok('errors' in parseFoodForm(form({ name: ' ' })), 'blank name');
   assert.ok('errors' in parseFoodForm(form({ barcode: '12 34' })), 'non-digit barcode');
+  assert.deepEqual(parseFoodForm(form({ barcode: '0012345678906' })), { errors: { barcode: "The last digit doesn't match. Check each digit" } });
   await assert.rejects(insertFood(db, { ...valid({}), serving: { name: 'scoop', amount: 0 } }));
 
   const bar = await save(db, { name: 'Protein bar', barcode: ' 0012345678905 ', protein: '', calories: '0' });

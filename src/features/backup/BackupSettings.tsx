@@ -4,6 +4,7 @@ import { ActivityIndicator, View } from 'react-native';
 
 import { Button, Card, Label, palettes, Phone, Row } from '../../ui';
 import { localDay } from '../diary/diary';
+import { UsdaKeySettings } from '../lookup/UsdaKey';
 import { exportBackup, parseBackup, restoreBackup, summarize, type Backup, type BackupSummary } from './backup';
 import { pickBackup, shareBackup } from './files';
 
@@ -30,8 +31,11 @@ function StatusLine({ status }: { status: Status }) {
     style={status.error ? { color: p.danger } : undefined}>{status.text}</Label>;
 }
 
-/** Settings: export every record to a JSON file, or replace all data from one after confirmation. */
-export default function BackupSettings({ onClose }: { onClose: () => void }) {
+/**
+ * Settings: the owner's USDA key, and backup, which exports every record to a JSON file or replaces
+ * all data from one after confirmation.
+ */
+export default function BackupSettings({ onClose, backLabel = 'Back to food log' }: { onClose: () => void; backLabel?: string }) {
   const db = useSQLiteContext();
   const [screen, setScreen] = useState<Screen>({ kind: 'menu' });
   const [status, setStatus] = useState<Status>(null);
@@ -115,9 +119,11 @@ export default function BackupSettings({ onClose }: { onClose: () => void }) {
     </Phone>;
   }
 
-  return <Phone title="Settings" onBack={onClose} backLabel="Back to food log">
+  return <Phone title="Settings" onBack={onClose} backLabel={backLabel}>
     <View style={{ padding: 18, gap: 16 }}>
-      <Label accessibilityRole="header" size={21} weight="600">Backup</Label>
+      <Label accessibilityRole="header" size={21} weight="600">Barcode lookup</Label>
+      <UsdaKeySettings />
+      <Label accessibilityRole="header" size={21} weight="600" style={{ marginTop: 8 }}>Backup</Label>
       <Card>
         <Label weight="600">Export a backup</Label>
         <Label size={13} muted>

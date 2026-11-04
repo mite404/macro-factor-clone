@@ -153,17 +153,22 @@ export function Sparkline({ values, color, height = 64, width = 145, dots = true
   </View>;
 }
 
-/** The search pill and food-tools button above the tab bar. Live when given callbacks. */
-export function SearchBar({ onSearch, onTools, toolsLabel = 'Food tools' }: {
-  onSearch?: () => void; onTools?: () => void; toolsLabel?: string;
+/** The search pill, with its barcode button inside, and the food-tools button. Live when given callbacks. */
+export function SearchBar({ onSearch, onBarcode, onTools, toolsLabel = 'Food tools' }: {
+  onSearch?: () => void; onBarcode?: () => void; onTools?: () => void; toolsLabel?: string;
 }) {
   const p = usePalette();
   return <Row style={{ gap: 8, marginBottom: 8 }}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Search for a food" disabled={!onSearch}
-      onPress={onSearch} style={{ flex: 1, backgroundColor: p.field, padding: 12, borderRadius: 24, minHeight: 44 }}>
-      <Row style={{ gap: 10 }}><Label muted>⌕</Label>
-        <Label muted style={{ flex: 1 }}>Search for a food</Label><Label muted>▥</Label></Row>
-    </Pressable>
+    <Row style={{ flex: 1, backgroundColor: p.field, borderRadius: 24, minHeight: 44 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Search for a food" disabled={!onSearch}
+        onPress={onSearch} style={{ flex: 1, padding: 12, paddingRight: 4, minHeight: 44 }}>
+        <Row style={{ gap: 10 }}><Label muted>⌕</Label><Label muted style={{ flex: 1 }}>Search for a food</Label></Row>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Look up a barcode" disabled={!onBarcode} onPress={onBarcode}
+        style={({ pressed }) => [styles.icon, { borderRadius: 22 }, pressed && { opacity: 0.5 }]}>
+        <Label muted>▥</Label>
+      </Pressable>
+    </Row>
     <Button label={toolsLabel} onPress={onTools}>✧</Button>
   </Row>;
 }

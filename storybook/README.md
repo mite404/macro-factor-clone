@@ -4,7 +4,9 @@ The MacroFactor reference screens are the app's UI. Their component kit moved fr
 `storybook/ui.tsx` to `src/ui.tsx`. `FoodLog`, `FoodSearch`, `QuickAdd`, `FoodDetail`, and
 `CreateFood` moved to `src/features/diary/LoggingScreens.tsx`, where fixtures became props and
 disabled buttons became callbacks. `src/features/goals/TargetsForm.tsx` follows `CreateFood`'s
-layout. `src/features/diary/Diary.tsx` wires them to SQLite. The
+layout. `src/features/lookup/BarcodeScreens.tsx` adds the logger's Barcode tab, in the place of the
+reference's Scan tab, and a USDA record review that follows `FoodDetail`.
+`src/features/diary/Diary.tsx` wires them to SQLite. The
 `App` stories render that production app.
 
 The other 11 references are under **Design references**. They show features that are not built
@@ -29,7 +31,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 26 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 33 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -51,12 +53,22 @@ adds dependencies and needs the owner's approval.
 | `SavedFoodCreateAndLog` | Empty search, create from the search text, validation, 150 g portion |
 | `SavedFoodEditKeepsHistory` | Edit food calories; the earlier diary snapshot stays 184.5 kcal |
 | `MeasuredServingWithKeyboard` | Per-100 ml food, Space selects the serving radio, 2 bottles = 660 ml |
-| `BackupExport` | The downloaded backup equals the restored version 2 fixture, archived food and targets included |
+| `BackupExport` | The downloaded backup equals the restored version 3 fixture, archived food, brand, and targets included |
 | `BackupRestoreConfirmation` | Counts and warning, Cancel keeps data, Replace all data replaces it |
 | `BackupRestoresTargets` | A version 2 file's targets are counted, restored, and compared |
 | `BackupRestoreRejectsInvalidFiles` | Malformed, newer-format, and dangling-food files leave data unchanged |
 | `BackupRestoreInProgressLocksNavigation` | Held restore writes: spinner, Cancel and back disabled, then restored |
+| `BarcodeSavedFoodOffline` | A saved barcode in another GTIN length is found with no USDA request; detail shows brand and source |
+| `BarcodeUsdaReviewSaveAndRepeat` | Keyboard lookup, top-ranked unrelated record ignored, review, save, log 28 g, repeat lookup is local |
+| `BarcodeMultipleRecords` | Two exact USDA records listed with record ids and dates; an invalid one is counted, not shown |
+| `BarcodeLookupErrors` | Check digit, length, missing key to Settings and back, 429, offline, rejected key, not found, invalid nutrition |
+| `BarcodeTimeoutRecovers` | A USDA request with no reply shows the loading state, then the timeout, then Try again succeeds |
+| `UsdaKeySettings` | Blank and malformed keys rejected, key saved masked and never shown, then removed |
+| `BarcodeLargeText` | At 1.5× text the USDA review keeps every figure whole and scrolls clear of Save food |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
+
+Barcode stories stub `window.fetch` for `api.nal.usda.gov` with fixtures and use a fake key held in
+memory by `key.web.ts`. They never call USDA or touch a Keychain.
 
 These are browser checks of React Native Web. They do not verify native iOS layout, keyboard,
 VoiceOver, or expo-sqlite on the device. See `docs/ios-builds.md`.
