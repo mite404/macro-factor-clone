@@ -6,8 +6,10 @@ import { test } from 'node:test';
 
 import { migrate } from '../../storage/migrations.ts';
 import { openTestDb as open } from '../../storage/testDb.ts';
+import { insertFood, updateFood } from '../foods/foods.ts';
 import {
   addDays,
+  copyEntries,
   dayTotals,
   deleteEntry,
   insertEntry,
@@ -85,6 +87,37 @@ test('rejects negative and non-finite values without adding a row', async () => 
     carbs: 2.5,
     fat: null,
   });
+  close();
+});
+
+test('copies snapshots to another day in one batch, leaving the source as it was', async () => {
+  const { db, close } = open(':memory:');
+  await migrate(db);
+  const to = addDays(day, 3);
+  const oats = { name: 'Oats', basis: 'g', calories: 380, protein: 10, carbs: null, fat: 7, serving: null, barcode: null } as const;
+  const foodId = await insertFood(db, oats);
+  await insertEntry(db, { day, label: 'Oats', calories: 380, protein: 10, carbs: null, fat: 7 }, { foodId, amount: 100, unit: 'g' });
+  await insertEntry(db, valid({ label: 'Rice', calories: '200', protein: '4', carbs: '44', fat: '0' }));
+  await insertEntry(db, { ...valid({ label: 'Tea', calories: '120' }), day: to });
+  const source = await listEntries(db, day);
+  await updateFood(db, foodId, { ...oats, calories: 999, carbs: 60 });
+
+  // A trigger fails the second copied row, so a row-by-row copy would leave Oats behind.
+  await db.execAsync(`CREATE TEMP TRIGGER fail BEFORE INSERT ON diary_entries WHEN NEW.label = 'Rice'
+    BEGIN SELECT RAISE(ABORT, 'injected'); END`);
+  await assert.rejects(copyEntries(db, source.map((e) => e.id), to));
+  assert.equal(dayTotals(await listEntries(db, to)).calories, 120);
+  await db.execAsync('DROP TRIGGER fail');
+
+  await copyEntries(db, [source[1].id, source[0].id], to);
+  const copied = await listEntries(db, to);
+  assert.equal(dayTotals(copied).calories, 700);
+  assert.deepEqual(await listEntries(db, day), source);
+  assert.deepEqual(copied.slice(1).map(({ id: _, ...e }) => e), [
+    { day: to, label: 'Oats', calories: 380, protein: 10, carbs: null, fat: 7, portion: { foodId, amount: 100, unit: 'g' } },
+    { day: to, label: 'Rice', calories: 200, protein: 4, carbs: 44, fat: 0, portion: null },
+  ]);
+  assert.equal(new Set([...source, ...copied].map((e) => e.id)).size, 5);
   close();
 });
 
