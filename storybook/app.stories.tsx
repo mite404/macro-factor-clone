@@ -212,6 +212,20 @@ export const QuickAddValidationAndCorrection: Story = {
   },
 };
 
+export const ActiveTabKeepsDraft: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Quick add' }));
+    await userEvent.type(canvas.getByLabelText('Calories in kilocalories'), '250');
+    await userEvent.click(canvas.getByRole('tab', { name: 'Quick Add' }));
+    await expect(canvas.getByLabelText('Calories in kilocalories')).toHaveValue('250');
+    await userEvent.click(canvas.getByRole('tab', { name: 'Barcode' }));
+    await userEvent.type(await canvas.findByLabelText('Barcode digits'), '0070');
+    await userEvent.click(canvas.getByRole('tab', { name: 'Barcode' }));
+    await expect(canvas.getByLabelText('Barcode digits')).toHaveValue('0070');
+  },
+};
+
 export const SavedFoodCreateAndLog: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
