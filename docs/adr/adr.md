@@ -16,9 +16,10 @@ React Native later without replacing the whole app.
 
 ## ADR-002: Local builds and personal installation
 
-Accepted scope: one owner, a MacBook Pro M4 Pro, and an iPhone 12 Pro. Use local Xcode builds rather
-than requiring EAS cloud or a paid developer account. A free Personal Team profile expires after
-seven days; this is a development workflow, not permanent installation. No public release planned.
+Accepted explicitly by the owner on October 31, 2026: build on the MacBook Pro M4 Pro and install on
+the iPhone 12 Pro using free Apple Personal Team signing. The owner accepts re-signing after the
+seven-day provisioning expiry. Do not require EAS cloud, paid Apple membership, or a macOS satellite
+for this workflow. No public release planned.
 
 **Web difference:** a JavaScript bundle alone is not an installable iOS app. Xcode compiles and
 signs the native application. Debug builds usually use Metro; a Release build bundles JavaScript for

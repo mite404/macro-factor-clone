@@ -11,6 +11,7 @@ node_modules/
 .expo/
 dist/
 web-build/
+storybook-static/
 expo-env.d.ts
 
 # Native

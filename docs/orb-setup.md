@@ -1,8 +1,8 @@
 # Orb setup
 
 `.agents/setup` prepares fresh orbs unless Amp reuses an exact project snapshot. It checks
-Node >=22.18 and runs `npm ci`. It can run again after a stale snapshot is updated. No
-`.agents/resume` exists because nothing needs authentication or repair on wake.
+Node >=22.18 and runs `npm ci`. It can run again after a stale snapshot is updated. Version control
+uses vanilla Git. No `.agents/resume` exists because nothing needs authentication or repair on wake.
 
 `.amp/services.yaml` declares the `web` service (`npm run web -- --port 8082`). Port 8081 is
 often occupied, so the port is fixed. Start it with `amp orb services ensure`.
