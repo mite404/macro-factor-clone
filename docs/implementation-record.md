@@ -142,6 +142,33 @@ the results. There are no open prerequisite PRs and no prerequisite CI blocker.
 Feature delivery is 4 of 8 merged, but ticket 06 has unresolved oracle findings and ticket 07 is
 held. Last confirmed remote main is [4d2c9ca][main06]. No Mac satellite has been started.
 
+## Ticket 09: copy diary entries
+
+[Implementation thread][t09-thread]. Built on main at `4f8f49f`, which includes ticket 08.
+
+The food log has a Copy entries button below a day's entries. It opens a screen with one visible
+checkbox per entry and a destination day that starts at today, or tomorrow when viewing today.
+Copying to the same day is allowed and shows a warning. Cancel returns with nothing added. The copy
+button stays disabled until an entry is selected. The existing write lock ignores repeat taps while
+the batch runs. The log then opens the destination day with a "Copied N entries" notice.
+`copyEntries` is one `INSERT ... SELECT` of the stored snapshots and portions. A failure copies
+nothing, and later food or recipe edits never change a copy. There is no meal library or schedule.
+
+Observed in this orb: typecheck, lint, 43 Node tests, iOS export, 45 Storybook stories at 390 px,
+the depth-4 nutrition-history check with a new copy op (56,362 sequences), and 32 of 32 mutants
+caught. A row-by-row copy fails the new Node test's injected-failure case. Removing the write lock
+fails `CopyEntriesToToday`. The web preview was driven and recorded through the empty, selected,
+same-day, and result states. Untested: depth 5, VoiceOver, large text on the copy screen, and the
+native build.
+
+[The Fable 5.1 oracle][t09-review] reviewed base `4f8f49f` to head `f356295`: approve, no high or
+medium findings, and four lows. Its effort level was not observable from inside the run. The owner
+chose to fix lows 2 to 4 and leave 1. Low 1: on web, Space does not toggle a copy checkbox; Enter
+does, and iOS is unaffected. Low 2: the log and copy day chevrons now expose the shown day as
+their accessible value, so VoiceOver reads it after a press. Low 3: the Copy button reads Copying
+and is disabled while the batch runs. Low 4: the new mutant where a copy reads the food's current
+calories needs four ops, so `mutants.ts` now pins the check to depth 4.
+
 ## Ticket 07: camera scanning
 
 [Implementation thread][t07-thread]. The owner started ticket 07 on November 4 while the ticket 06
@@ -568,6 +595,8 @@ No merges are authorized by this record. No native build has been verified by th
 [ci-thread]: https://ampcode.com/threads/T-118f58c0-7f55-46e6-9d1f-83d662f2b3dc
 [t07-thread]: https://ampcode.com/threads/T-4bd49a1c-f754-4a63-8218-563690c638dd
 [t07-review]: https://ampcode.com/threads/T-4f9e25ad-9fd5-4eb6-89fe-07f62a8955c1
+[t09-thread]: https://ampcode.com/threads/T-a7a0c8d3-3e33-418d-91eb-279195c746f2
+[t09-review]: https://ampcode.com/threads/T-ad4e43d0-9258-41e5-9f1a-3afc75f46dc5
 [backup-thread]: https://ampcode.com/threads/T-92446160-d0c9-4113-8d29-e772c221d832
 [targets-thread]: https://ampcode.com/threads/T-726bca15-3a60-4507-a2a7-e12b1b49595e
 [lookup-thread]: https://ampcode.com/threads/T-68986624-b1ed-44fc-be7b-6ae0d6bed2eb

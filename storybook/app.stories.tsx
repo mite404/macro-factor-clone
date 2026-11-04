@@ -6,7 +6,7 @@ import { restoreBackup, type Backup } from '../src/features/backup/backup';
 import v1Backup from '../src/features/backup/backup-v1.json';
 import v2Backup from '../src/features/backup/backup-v2.json';
 import v4Backup from '../src/features/backup/backup-v4.json';
-import { insertEntry, localDay } from '../src/features/diary/diary';
+import { addDays, insertEntry, localDay } from '../src/features/diary/diary';
 import { insertFood } from '../src/features/foods/foods';
 import { saveTargets } from '../src/features/goals/goals';
 import { camera } from './camera';
@@ -927,5 +927,61 @@ export const RecipeManyIngredientsScrolls: Story = {
     last.scrollIntoView({ block: 'end' });
     const save = canvas.getByRole('button', { name: 'Save' });
     await waitFor(() => expect(last.getBoundingClientRect().bottom).toBeLessThanOrEqual(save.getBoundingClientRect().top));
+  },
+};
+
+let releaseCopy = () => {};
+export const CopyEntriesToToday: Story = {
+  args: {
+    onInit: async (db) => {
+      const yesterday = addDays(localDay(), -1);
+      const foodId = await insertFood(db, { name: 'Oats', basis: 'g', calories: 380, protein: 10, carbs: null, fat: 7, serving: null, barcode: null });
+      await insertEntry(db, { day: yesterday, label: 'Oats', calories: 380, protein: 10, carbs: null, fat: 7 }, { foodId, amount: 100, unit: 'g' });
+      await insertEntry(db, { day: yesterday, label: 'Rice', calories: 200, protein: 4, carbs: 44, fat: 0 });
+      await insertEntry(db, { day: yesterday, label: 'Tea', calories: 50, protein: 0, carbs: 12, fat: 0 });
+      await insertEntry(db, { day: localDay(), label: 'Coffee', calories: 120, protein: 6, carbs: 10, fat: 6 });
+      const gate = new Promise<void>((resolve) => (releaseCopy = resolve));
+      const runAsync = db.runAsync;
+      db.runAsync = async (sql, params) => {
+        if (sql.includes('SELECT ?, label')) await gate;
+        return runAsync(sql, params);
+      };
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const pick = async (name: string) => userEvent.click(canvas.getByRole('checkbox', { name: new RegExp(`^${name},`) }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Previous day' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Copy entries' }));
+    await expect(await canvas.findByRole('button', { name: 'Select entries to copy' })).toHaveAttribute('aria-disabled', 'true');
+    await pick('Oats');
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Go to today' }));
+    await expect(await canvas.findByLabelText(/^Total 120 kilocalories/)).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Previous day' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Copy entries' }));
+    await expect(canvas.getByText('Today')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Next destination day' })).toHaveAttribute('aria-valuetext', 'Today');
+    await pick('Oats');
+    await pick('Rice');
+    await pick('Tea');
+    await pick('Tea');
+    await expect(canvas.getByRole('checkbox', { name: /^Tea,/ })).toHaveAttribute('aria-checked', 'false');
+    const copy = canvas.getByRole('button', { name: 'Copy 2 entries' });
+    for (let i = 0; i < 3; i++) copy.click();
+    await expect(await canvas.findByRole('button', { name: 'Copying…' })).toHaveAttribute('aria-disabled', 'true');
+    releaseCopy();
+
+    await expect(await canvas.findByText('Copied 2 entries to Today.')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Previous day' }));
+    await expect(await canvas.findByLabelText(/^Total 630 kilocalories/)).toBeVisible();
+    await expect(canvas.queryByText(/^Copied/)).toBeNull();
+    // Reread after every tap's write has had its chance to land: one batch, not three.
+    await userEvent.click(canvas.getByRole('button', { name: 'Go to today' }));
+    await expect(await canvas.findByLabelText(/^Total 700 kilocalories/)).toBeVisible();
+    await expect(canvas.getAllByRole('button', { name: /kilocalories, protein/ }).map(e => e.getAttribute('aria-label')?.split(',')[0]))
+      .toEqual(['Coffee', 'Oats', 'Rice']);
+    await expect(canvas.getByRole('button', { name: /^Oats, 100 g, 380 kilocalories, protein 10, carbs \?, fat 7 grams/ })).toBeVisible();
   },
 };

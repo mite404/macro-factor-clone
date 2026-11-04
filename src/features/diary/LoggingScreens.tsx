@@ -34,6 +34,10 @@ function formatDay(day: string, options: Intl.DateTimeFormatOptions): string {
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, { timeZone: 'UTC', ...options });
 }
 
+/** "Today", or a day as "Sat, Oct 31, 2026". */
+export const dayName = (day: string) =>
+  day === localDay() ? 'Today' : formatDay(day, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
 /** The day's running totals for the logger header; unknown macros stay "?". */
 export function daySummary(entries: Nutrition[]): string {
   const t = dayTotals(entries);
@@ -122,9 +126,9 @@ export function FoodSearch({ summary, query, foods, onQuery, onFood, onNew, onCl
   </Phone>;
 }
 
-/** The original's plain-text arrows, given a 44-pt hit area. */
-export function Chevron({ children, label, onPress }: { children: string; label: string; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
+/** The original's plain-text arrows, given a 44-pt hit area. `value`, such as the day shown, is read after a press. */
+export function Chevron({ children, label, value, onPress }: { children: string; label: string; value?: string; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} aria-valuetext={value} onPress={onPress}
     style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
     <Label>{children}</Label>
   </Pressable>;
@@ -156,9 +160,9 @@ function TargetsCard({ rows, onTargets }: { rows: TargetRow[]; onTargets: () => 
   </View>;
 }
 
-function TimelineBody({ day, entries, targets, onDay, onEntry, onSettings, onTargets }: {
-  day: string; entries: Entry[]; targets: Targets; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
-  onSettings: () => void; onTargets: () => void;
+function TimelineBody({ day, entries, targets, notice, onDay, onEntry, onCopy, onSettings, onTargets }: {
+  day: string; entries: Entry[]; targets: Targets; notice?: string; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
+  onCopy: () => void; onSettings: () => void; onTargets: () => void;
 }) {
   const p = usePalette();
   const totals = dayTotals(entries);
@@ -177,11 +181,9 @@ function TimelineBody({ day, entries, targets, onDay, onEntry, onSettings, onTar
       {/* Balances the settings button so the date stays centred. */}
       <View style={{ width: 44 }} />
       <Row style={{ gap: 24 }}>
-        <Chevron label="Previous day" onPress={() => onDay(addDays(day, -1))}>‹</Chevron>
-        <Label accessibilityRole="header" style={{ minWidth: 120, textAlign: 'center' }}>
-          {day === today ? 'Today' : formatDay(day, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-        </Label>
-        <Chevron label="Next day" onPress={() => onDay(addDays(day, 1))}>›</Chevron>
+        <Chevron label="Previous day" value={dayName(day)} onPress={() => onDay(addDays(day, -1))}>‹</Chevron>
+        <Label accessibilityRole="header" style={{ minWidth: 120, textAlign: 'center' }}>{dayName(day)}</Label>
+        <Chevron label="Next day" value={dayName(day)} onPress={() => onDay(addDays(day, 1))}>›</Chevron>
       </Row>
       <Chevron label="Settings" onPress={onSettings}>⚙︎</Chevron>
     </Row>
@@ -195,6 +197,7 @@ function TimelineBody({ day, entries, targets, onDay, onEntry, onSettings, onTar
       </Pressable>)}
     </Row>
     {day !== today ? <Button onPress={() => onDay(today)} style={{ alignSelf: 'center' }}>Go to today</Button> : null}
+    {notice ? <Label role="status" size={12} style={{ textAlign: 'center' }}>{notice}</Label> : null}
     <Macros values={values} targets={rows.length === 0 ? undefined : NUTRIENTS.map(([key, , unit]) => {
       const target = targets[key];
       return target === undefined ? null : `${round(target)}${unit === 'g' ? ' g' : ''}`;
@@ -216,6 +219,8 @@ function TimelineBody({ day, entries, targets, onDay, onEntry, onSettings, onTar
         <Label size={11} muted>{macroLine(e)}{e.portion ? ` · ${portionText(e.portion)}` : ''}</Label>
       </View><Label>✎</Label></Row></Card>
     </Pressable>)}
+    {entries.length > 0 ? <Button hint="Choose entries from this day to copy to another day" onPress={onCopy}
+      style={{ alignSelf: 'flex-start' }}>Copy entries</Button> : null}
   </View>;
 }
 
@@ -227,14 +232,61 @@ function LogFooter({ onSearch, onBarcode, onQuickAdd }: { onSearch: () => void; 
 }
 
 /** The day's food log: day picker, totals against the current targets, and entries; search opens the logger. */
-export function FoodLog({ day, entries, targets, onDay, onEntry, onSearch, onBarcode, onQuickAdd, onSettings, onTargets }: {
-  day: string; entries: Entry[]; targets: Targets; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
-  onSearch: () => void; onBarcode: () => void; onQuickAdd: () => void; onSettings: () => void; onTargets: () => void;
+export function FoodLog({ day, entries, targets, notice, onDay, onEntry, onCopy, onSearch, onBarcode, onQuickAdd, onSettings, onTargets }: {
+  day: string; entries: Entry[]; targets: Targets; notice?: string; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
+  onCopy: () => void; onSearch: () => void; onBarcode: () => void; onQuickAdd: () => void; onSettings: () => void;
+  onTargets: () => void;
 }) {
   return <Phone dark footer={<LogFooter onSearch={onSearch} onBarcode={onBarcode} onQuickAdd={onQuickAdd} />}>
-    <TimelineBody day={day} entries={entries} targets={targets} onDay={onDay} onEntry={onEntry} onSettings={onSettings}
-      onTargets={onTargets} />
+    <TimelineBody day={day} entries={entries} targets={targets} notice={notice} onDay={onDay} onEntry={onEntry}
+      onCopy={onCopy} onSettings={onSettings} onTargets={onTargets} />
   </Phone>;
+}
+
+/** Selects entries of `day` with visible checkboxes and copies them, as logged, to day `to`. */
+export function CopyEntries({ copying, onCopy, onBack, ...body }: Parameters<typeof CopyBody>[0] & {
+  copying: boolean; onCopy: () => void; onBack: () => void;
+}) {
+  const n = body.ids.length;
+  return <Phone dark title="Copy entries" onBack={onBack} backLabel="Cancel" footer={<LoggerFooter>
+    <Button primary disabled={n === 0 || copying} onPress={onCopy}>
+      {n === 0 ? 'Select entries to copy' : copying ? 'Copying…' : `Copy ${n} ${n === 1 ? 'entry' : 'entries'}`}
+    </Button>
+  </LoggerFooter>}>
+    <CopyBody {...body} />
+  </Phone>;
+}
+
+function CopyBody({ day, entries, ids, to, error, onToggle, onTo }: {
+  day: string; entries: Entry[]; ids: number[]; to: string; error: string; onToggle: (id: number) => void; onTo: (day: string) => void;
+}) {
+  const p = usePalette();
+  return <LoggerBody>
+    <Label accessibilityRole="header" weight="600">From {dayName(day)}</Label>
+    <Label size={12} muted>Copies keep the nutrition as logged. The original entries stay as they are.</Label>
+    <View>{entries.map(e => {
+      const checked = ids.includes(e.id);
+      return <Pressable key={e.id} role="checkbox" aria-checked={checked} onPress={() => onToggle(e.id)}
+        accessibilityLabel={`${e.label}, ${e.portion ? `${portionText(e.portion)}, ` : ''}${round(e.calories)} kilocalories`}
+        style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 44, paddingVertical: 10,
+          borderBottomWidth: 1, borderColor: p.border }, pressed && { opacity: 0.5 }]}>
+        <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: checked ? p.text : p.muted,
+          backgroundColor: checked ? p.text : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+          {checked ? <Label size={14} weight="700" style={{ color: p.inverse }}>✓</Label> : null}
+        </View>
+        <View style={{ flex: 1 }}><Label size={13}>{e.label}</Label>
+          <Label size={11} muted>{macroLine(e)}{e.portion ? ` · ${portionText(e.portion)}` : ''}</Label></View>
+      </Pressable>;
+    })}</View>
+    <Label size={13}>Copy to</Label>
+    <Row style={{ justifyContent: 'center', gap: 24 }}>
+      <Chevron label="Previous destination day" value={dayName(to)} onPress={() => onTo(addDays(to, -1))}>‹</Chevron>
+      <Label style={{ minWidth: 120, textAlign: 'center' }}>{dayName(to)}</Label>
+      <Chevron label="Next destination day" value={dayName(to)} onPress={() => onTo(addDays(to, 1))}>›</Chevron>
+    </Row>
+    {to === day ? <Label size={12} style={{ color: p.warning }}>Same day: copies are added next to the originals.</Label> : null}
+    {error ? <Label accessibilityRole="alert" size={12} style={{ color: p.danger }}>{error}</Label> : null}
+  </LoggerBody>;
 }
 
 const macroFields = [['protein', 'Protein'], ['fat', 'Fat'], ['carbs', 'Carbs']] as const;

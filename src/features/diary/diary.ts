@@ -126,6 +126,20 @@ export async function updateEntry(db: Db, id: number, e: Omit<EntryInput, 'day'>
   );
 }
 
+/**
+ * Copies entries' stored snapshots and portions, never their foods' current values, to `day` as
+ * new entries in logging order. One statement, so a failure copies nothing.
+ * @throws If the storage CHECK constraints reject `day`.
+ */
+export async function copyEntries(db: Db, ids: number[], day: string): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO diary_entries (day, label, calories, protein, carbs, fat, food_id, amount, unit)
+     SELECT ?, label, calories, protein, carbs, fat, food_id, amount, unit FROM diary_entries
+     WHERE id IN (${ids.map(() => '?').join(', ')}) ORDER BY id`,
+    [day, ...ids],
+  );
+}
+
 /** Permanently removes one entry. */
 export async function deleteEntry(db: Db, id: number): Promise<void> {
   await db.runAsync('DELETE FROM diary_entries WHERE id = ?', [id]);

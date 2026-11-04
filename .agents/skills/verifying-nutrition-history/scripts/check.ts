@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
 
 import { exportBackup, parseBackup, restoreBackup, type Backup } from '../../../../src/features/backup/backup.ts';
-import { deleteEntry, insertEntry, listEntries, localDay, parseEntryForm, updateEntry, type Entry } from '../../../../src/features/diary/diary.ts';
+import { copyEntries, deleteEntry, insertEntry, listEntries, localDay, parseEntryForm, updateEntry, type Entry } from '../../../../src/features/diary/diary.ts';
 import {
   archiveFood,
   insertFood,
@@ -202,6 +202,10 @@ const ops: Op[] = [
   {
     name: 'correct', slot: 0, words: 'correct the first entry to "Fixed" 200 kcal, protein blank, carbs 0, fat 3,5',
     next: (s) => (s.entries.length ? { ...s, entries: [{ ...s.entries[0], ...CORRECTED }, ...s.entries.slice(1)], rejected: false } : null),
+  },
+  {
+    name: 'copy', slot: 0, words: 'copy the first and last entries to the same day',
+    next: (s) => (s.entries.length ? { ...s, entries: [...s.entries, ...(s.entries.length === 1 ? s.entries : [s.entries[0], s.entries.at(-1)!])], rejected: false } : null),
   },
   { name: 'delete', slot: 0, words: 'delete the first entry', next: (s) => (s.entries.length ? { ...s, entries: s.entries.slice(1), rejected: false } : null) },
   { name: 'reopen', slot: 0, words: 'close and reopen the database file, then migrate', next: (s) => ({ ...s, rejected: false }) },
@@ -445,6 +449,9 @@ async function apply(db: Db, op: Op, before: State, after: State): Promise<boole
     const parsed = parseEntryForm(CORRECTION, DAY);
     if ('errors' in parsed) throw new Error(`valid correction rejected: ${JSON.stringify(parsed.errors)}`);
     await updateEntry(db, (await listEntries(db, DAY))[0].id, parsed.entry);
+  } else if (op.name === 'copy') {
+    const shown = await listEntries(db, DAY);
+    await copyEntries(db, [shown.at(-1)!.id, shown[0].id], DAY);
   } else if (op.name === 'delete') {
     await deleteEntry(db, (await listEntries(db, DAY))[0].id);
   } else if (op.name === 'failedRestores') {
