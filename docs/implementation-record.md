@@ -134,7 +134,7 @@ the results. There are no open prerequisite PRs and no prerequisite CI blocker.
 | 04 | Manual targets | [PR #6][pr6], merged |
 | 05 | USDA lookup | [PR #7][pr7], merged |
 | 06 | Open Food Facts fallback | [PR #8][pr8], merged by worker; oracle corrections pending |
-| 07 | Camera scanning | [PR #10][pr10], oracle high finding fixed; native acceptance pending |
+| 07 | Camera scanning | Draft [PR #10][pr10]; Fable oracle review pending; native acceptance pending |
 | 08 | Weighed recipes | Queued after 07 |
 | 09 | Copy diary entries | Queued after 08 |
 | 10 | Weight history | Queued after 09 |
@@ -155,15 +155,18 @@ restarts it on return; no app code handles that. Denial shows Allow camera or Op
 typed entry kept.
 `NSCameraUsageDescription` is set; the microphone description is omitted. No frames are stored.
 
-Observed in this orb: typecheck, lint, 34 Node tests, iOS export, 39 Storybook stories, and the
+Observed in this orb: typecheck, lint, 35 Node tests, iOS export, 39 Storybook stories, and the
 depth-4 nutrition-history check passed. A Storybook `expo-camera` stand-in fires each code on every
 render; removing the lock made `BarcodeScanOnceAndRescan` fail. The real web module rendered the
 denied state in headless Chromium. Untested: a real camera, the iOS prompt, background/foreground,
 VoiceOver, and the native build. The physical iPhone 12 Pro gate is pending.
 
-The oracle's high finding: a scanned UPC-E was read as EAN-8, so its check digit failed or it
-resolved to another GTIN. Scans of type `upc_e` now expand to UPC-A first; a Node test covers each
-expansion rule. Typed 8-digit codes still read as EAN-8. Low findings await the owner's review.
+A pre-review by a generic Amp Task subagent, not the required Fable 5.1 xhigh oracle, found one high
+issue. A scanned UPC-E was read as EAN-8, so its check digit failed or it resolved to another GTIN.
+Scans of type `upc_e` now expand to UPC-A first. A Node test covers each rule, the 2/3 boundary, and
+number system 1; the subagent found 0 mismatches against its own expander over all 2,000,000 codes.
+Typed 8-digit codes still read as EAN-8. Its low findings await the owner. The PR was opened ready,
+then returned to draft when main's review gate arrived; the Fable oracle review has not run.
 
 ## Ticket 06 oracle corrections are required after shipping
 
