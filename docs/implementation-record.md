@@ -134,7 +134,7 @@ the results. There are no open prerequisite PRs and no prerequisite CI blocker.
 | 04 | Manual targets | [PR #6][pr6], merged |
 | 05 | USDA lookup | [PR #7][pr7], merged |
 | 06 | Open Food Facts fallback | [PR #8][pr8], merged by worker; oracle corrections pending |
-| 07 | Camera scanning | Draft [PR #10][pr10]; Fable oracle review pending; native acceptance pending |
+| 07 | Camera scanning | [PR #10][pr10], merged after Fable review and green CI; native acceptance pending |
 | 08 | Weighed recipes | Queued after 07 |
 | 09 | Copy diary entries | Queued after 08 |
 | 10 | Weight history | Queued after 09 |
@@ -187,6 +187,12 @@ Low 3: the AppState re-read is exercised only through the Storybook stand-in on 
 terminates the app when camera access changes in Settings, so the iOS path is covered by the scanner
 remounting on relaunch. The re-read is unverified on a device. Left as is: a UPC-E scan fills the
 field with its expanded 12-digit UPC-A, and Allow camera is unreachable on iOS.
+
+The same oracle approved the fixes at `e23be4b` and the merge of main's ticket 06 corrections at
+`9a8c284`, which changed only the Storybook README table. GitHub CI run [41789295767][ci07] passed
+all six jobs on `9a8c284`. The owner authorized this thread to merge after review and green CI;
+[PR #10][pr10] merged at 07:04:08 UTC on November 4 as `93c944c`. The physical iPhone 12 Pro camera
+gate remains pending; see `docs/ios-builds.md`.
 
 ## Ticket 06 oracle corrections are required after shipping
 
@@ -553,6 +559,7 @@ No merges are authorized by this record. No native build has been verified by th
 [pr7]: https://github.com/mite404/macro-factor-clone/pull/7
 [pr8]: https://github.com/mite404/macro-factor-clone/pull/8
 [pr10]: https://github.com/mite404/macro-factor-clone/pull/10
+[ci07]: https://github.com/mite404/macro-factor-clone/actions/runs/41789295767
 [main06]:
   https://github.com/mite404/macro-factor-clone/commit/4d2c9ca30594542a9161ee4668bbb1a262abd31f
 [coordinator]: https://ampcode.com/threads/T-01a19290-a404-75d0-9b1c-735ad66c0b4e
