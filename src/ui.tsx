@@ -112,13 +112,13 @@ export function Macros({ values, targets, fills, over, label }: {
   const names = ['Calories', 'Protein', 'Fat', 'Carbs'];
   const tint = [colors.calories, colors.protein, colors.fat, colors.carbs];
   return <View accessible={label !== undefined} accessibilityLabel={label}
-    style={[styles.row, { justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }]}>
-    {names.map((name, i) => <View key={name} style={{ flex: 1, gap: 4 }}>
+    style={[styles.row, { flexWrap: 'wrap', columnGap: 12, rowGap: 16, alignItems: 'flex-start' }]}>
+    {/* Normal text fits four equal 22% columns. A figure that outgrows its column (large system text,
+        narrow screens) wraps the row into fewer columns instead of being cut off or shrunk. */}
+    {names.map((name, i) => <View key={name} style={{ flexGrow: 1, minWidth: '22%', gap: 4 }}>
       <Label size={11} muted>{name}</Label>
-      {/* One line height for every value, so bars line up under the larger calorie figure. Large system text
-          shrinks a figure to fit its column on iOS instead of breaking it between digits. */}
-      <Label size={i === 0 ? 24 : 20} weight="500" style={{ lineHeight: 32 }} numberOfLines={1} adjustsFontSizeToFit
-        minimumFontScale={0.5}>{values[i]}</Label>
+      {/* One line height for every value, so bars line up under the larger calorie figure. */}
+      <Label size={i === 0 ? 24 : 20} weight="500" style={{ lineHeight: 32 }}>{values[i]}</Label>
       {targets?.[i] ? <><Label size={10} muted>of {targets[i]}</Label>
         <View style={{ height: 3, backgroundColor: p.field, marginTop: 5 }}>
           <View style={{ height: 3, width: fills ? `${fills[i] * 100}%` : '74%',

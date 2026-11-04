@@ -29,7 +29,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 25 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 26 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -44,6 +44,7 @@ adds dependencies and needs the owner's approval.
 | `EmptyDiary` | Empty day, zero totals, and no targets or invented goal |
 | `TargetsUnderAndIncomplete` | Amounts left, unknown protein marked incomplete, carbs without a target |
 | `TargetsOver` | 2150 kcal against 2000 kcal reads 150 kcal over |
+| `TargetsLargeText` | At 1.5× text every total stays whole on one line; the last entry scrolls above the footer |
 | `SetTargetsWithKeyboard` | Typed and tabbed targets, 0 rejected, edits change the comparison, not the entry |
 | `PopulatedDiary` | Seeded entries, a lower-bound protein total, incomplete-macro warning |
 | `QuickAddValidationAndCorrection` | Required and invalid calories, save, correct, delete |

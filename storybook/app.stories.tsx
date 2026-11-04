@@ -95,6 +95,43 @@ export const TargetsOver: Story = {
   },
 };
 
+// Stands in for iOS Dynamic Type in the browser: every rendered font size and line height × 1.5.
+function enlargeText(root: HTMLElement) {
+  for (const el of root.querySelectorAll<HTMLElement>('*')) {
+    if (!el.style.fontSize) continue;
+    el.style.fontSize = `${parseFloat(el.style.fontSize) * 1.5}px`;
+    if (el.style.lineHeight) el.style.lineHeight = `${parseFloat(el.style.lineHeight) * 1.5}px`;
+  }
+}
+
+export const TargetsLargeText: Story = {
+  args: {
+    onInit: async (db) => {
+      await saveTargets(db, { calories: 2000, protein: 100, fat: 70, carbs: 250 });
+      for (const [label, calories] of [['Breakfast', 450], ['Lunch', 700], ['Snack', 250], ['Dinner', 600], ['Dessert', 150]] as const) {
+        await insertEntry(db, { day: localDay(), label, calories, protein: 16, carbs: 48, fat: 13 });
+      }
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('2150 of 2000 kcal')).toBeVisible();
+    enlargeText(canvasElement);
+    // Each total stays whole on one line: no ellipsis and no break between digits.
+    await waitFor(() => {
+      for (const value of ['2150', '80', '65', '240']) {
+        const el = canvas.getByText(value);
+        expect(el.scrollWidth, `${value} is cut off`).toBeLessThanOrEqual(el.clientWidth);
+        expect(el.getBoundingClientRect().height, `${value} wraps`).toBeLessThan(parseFloat(getComputedStyle(el).lineHeight) * 1.5);
+      }
+    });
+    const last = canvas.getByRole('button', { name: /^Dessert, 150 kilocalories/ });
+    last.scrollIntoView({ block: 'end' });
+    const footer = canvas.getByRole('button', { name: 'Search for a food' });
+    await waitFor(() => expect(last.getBoundingClientRect().bottom).toBeLessThanOrEqual(footer.getBoundingClientRect().top));
+  },
+};
+
 export const SetTargetsWithKeyboard: Story = {
   args: { onInit: (db) => insertEntry(db, { day: localDay(), label: 'Oats', calories: 2150, protein: 60, carbs: 300, fat: 50 }) },
   play: async ({ canvasElement }) => {
