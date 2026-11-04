@@ -47,8 +47,11 @@ export function parseGtin(text: string): { gtin: Gtin; digits: string } | { erro
   return { gtin: gtin as Gtin, digits };
 }
 
-/** Validates food form text at the input boundary. */
-export function parseFoodForm(form: FoodForm): { food: FoodInput } | { errors: FoodFormErrors } {
+/**
+ * Validates food form text at the input boundary.
+ * @param saved The edited food's stored barcode, kept as is while unchanged even if it predates GTIN checks.
+ */
+export function parseFoodForm(form: FoodForm, saved: string | null = null): { food: FoodInput } | { errors: FoodFormErrors } {
   const nutrition = parseNutrition(form);
   const errors: FoodFormErrors = 'errors' in nutrition ? { ...nutrition.errors } : {};
   const name = form.name.trim();
@@ -58,7 +61,8 @@ export function parseFoodForm(form: FoodForm): { food: FoodInput } | { errors: F
   if (servingAmount === undefined || servingAmount === 0) errors.servingAmount = 'Enter an amount above 0';
   else if (servingName === '' && servingAmount !== null) errors.servingName = 'Name this serving';
   else if (servingName !== '' && servingAmount === null) errors.servingAmount = `Enter its amount in ${form.basis}`;
-  const code = form.barcode.trim() === '' ? null : parseGtin(form.barcode);
+  const barcode = form.barcode.trim();
+  const code = barcode === '' ? null : barcode === saved ? { digits: saved } : parseGtin(barcode);
   if (code && 'error' in code) errors.barcode = code.error;
   if (Object.keys(errors).length > 0 || 'errors' in nutrition) return { errors };
   return {
@@ -102,7 +106,7 @@ type FoodRow = Omit<Food, 'serving' | 'source'> & {
   servingName: string | null; servingAmount: number | null; sourceId: string | null; sourceName: string | null;
   retrievedOn: string | null;
 };
-// The schema keeps serving name and amount set together; imports always set all three source fields.
+// The schema keeps serving name and amount set together; imports and restores set all three source fields.
 const toFood = ({ servingName, servingAmount, sourceId, sourceName, retrievedOn, ...food }: FoodRow): Food => ({
   ...food,
   serving: servingName === null ? null : { name: servingName, amount: servingAmount! },

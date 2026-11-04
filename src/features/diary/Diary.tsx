@@ -204,7 +204,7 @@ export default function Diary() {
       }}
       onBack={() => go(back)}
       onSave={() => {
-        const result = parseFoodForm(form);
+        const result = parseFoodForm(form, from?.barcode ?? null);
         if ('errors' in result) return setErrors(result.errors);
         write(async () => {
           const savedId = id ?? (await insertFood(db, result.food));
