@@ -1,5 +1,5 @@
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import BackupSettings from '../backup/BackupSettings';
 import {
@@ -17,10 +17,12 @@ import {
   type Ingredient, type Recipe, type RecipeForm, type RecipeFormErrors,
 } from '../recipes/recipes';
 import {
-  deleteEntry, insertEntry, listEntries, localDay, parseAmount, parseEntryForm, updateEntry,
+  addDays, copyEntries, deleteEntry, insertEntry, listEntries, localDay, parseAmount, parseEntryForm, updateEntry,
   type Entry, type EntryForm, type FormErrors, type NutritionForm, type Unit,
 } from './diary';
-import { CreateFood, daySummary, FoodDetail, FoodLog, FoodSearch, QuickAdd, type LoggerTab } from './LoggingScreens';
+import {
+  CopyEntries, CreateFood, dayName, daySummary, FoodDetail, FoodLog, FoodSearch, QuickAdd, type LoggerTab,
+} from './LoggingScreens';
 
 // A barcode lookup in progress or finished. `result` belongs to `code` as it was when looked up.
 // `scanning` shows the camera in place of the result; a scan closes it and looks the code up.
@@ -29,9 +31,11 @@ type BarcodeView = { kind: 'barcode'; code: string; result: Lookup | null; looki
 type Picking = { query: string; food: Food | null; quantity: string; unit: 'g' | 'serving' };
 type BuildView = { kind: 'build'; id: number | null; form: RecipeForm; ingredients: Ingredient[]; picking: Picking | null; back: View };
 // The visible screen. Quick add and corrections share `entry`; `edit` keeps `from`'s brand and
-// source and returns to `back` on cancel; `settings` returns to `back`.
+// source and returns to `back` on cancel; `settings` returns to `back`. `copy` selects entries of
+// the day shown, by id, to copy to day `to`; `notice` reports the last copy on the log.
 type View =
-  | { kind: 'log' }
+  | { kind: 'log'; notice?: string }
+  | { kind: 'copy'; ids: number[]; to: string }
   | { kind: 'entry'; id: number | null; form: EntryForm; portion: Entry['portion'] }
   | { kind: 'search' }
   | BarcodeView
@@ -81,13 +85,20 @@ export default function Diary() {
   // Bumped by every navigation and lookup, so a late provider reply never lands on another screen or code.
   const lookups = useRef(0);
 
-  const reload = useCallback(async () => {
-    setEntries(await listEntries(db, day));
-    setTargets(await loadTargets(db));
-  }, [db, day]);
+  // Bumped after every write; a reply for a day or write already superseded never lands.
+  const [saved, setSaved] = useState(0);
   useEffect(() => {
-    reload();
-  }, [reload]);
+    let current = true;
+    Promise.all([listEntries(db, day), loadTargets(db)]).then(([list, goals]) => {
+      if (!current) return;
+      setEntries(list);
+      setTargets(goals);
+    });
+    return () => {
+      current = false;
+    };
+  }, [db, day, saved]);
+  const reload = () => setSaved(n => n + 1);
   useEffect(() => {
     if (view.kind === 'search') searchFoods(db, query).then(setFoods);
   }, [db, query, view.kind]);
@@ -112,7 +123,7 @@ export default function Diary() {
     writing.current = true;
     try {
       go(await action());
-      await reload();
+      reload();
     } catch {
       setError('Could not save. Your changes are still here; try again.');
     } finally {
@@ -346,7 +357,24 @@ export default function Diary() {
     }} />;
   }
 
-  return <FoodLog day={day} entries={entries} targets={targets} onDay={setDay} onEntry={e => go(entryView(e))}
+  if (view.kind === 'copy') {
+    const { ids, to } = view;
+    return <CopyEntries day={day} entries={entries} ids={ids} to={to} error={error} onBack={close}
+      onToggle={id => setView({ ...view, ids: ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id] })}
+      onTo={next => setView({ ...view, to: next })}
+      onCopy={() => write(async () => {
+        await copyEntries(db, ids, to);
+        setDay(to);
+        return { kind: 'log', notice: `Copied ${ids.length} ${ids.length === 1 ? 'entry' : 'entries'} to ${dayName(to)}.` };
+      })} />;
+  }
+
+  return <FoodLog day={day} entries={entries} targets={targets} notice={view.notice} onEntry={e => go(entryView(e))}
+    onDay={next => {
+      setDay(next);
+      setView({ kind: 'log' });
+    }}
+    onCopy={() => go({ kind: 'copy', ids: [], to: day === localDay() ? addDays(day, 1) : localDay() })}
     onSearch={() => go({ kind: 'search' })} onBarcode={() => go(blankBarcode)} onQuickAdd={() => go(blankEntry)}
     onSettings={() => go({ kind: 'settings', back: { kind: 'log' } })}
     onTargets={() => go(targetsView(targets))} />;
