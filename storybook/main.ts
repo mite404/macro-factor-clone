@@ -24,6 +24,7 @@ const config: StorybookConfig = {
       ...vite.resolve,
       alias: [
         { find: /^expo-sqlite$/, replacement: join(import.meta.dirname, 'sqlite.tsx') },
+        { find: /^expo-camera$/, replacement: join(import.meta.dirname, 'camera.tsx') },
         { find: /^wa-sqlite$/, replacement: join(waSqlite, 'sqlite-api.js') },
         { find: 'wa-sqlite/dist/wa-sqlite.mjs', replacement: join(waSqlite, 'wa-sqlite.js') },
         { find: 'wa-sqlite/src/examples/MemoryVFS.js', replacement: join(waSqlite, 'MemoryVFS.js') },
