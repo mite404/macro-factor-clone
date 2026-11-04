@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
 
+import { exportBackup, parseBackup, restoreBackup, type Backup } from '../../../../src/features/backup/backup.ts';
 import { deleteEntry, insertEntry, listEntries, parseEntryForm, updateEntry, type Entry } from '../../../../src/features/diary/diary.ts';
 import {
   archiveFood,
@@ -28,6 +29,13 @@ type ExpectedEntry = Omit<Entry, 'id'>;
 type State = { slots: [Slot, Slot]; entries: ExpectedEntry[]; saves: number; rejected: boolean };
 type Op = { name: string; words: string; slot: 0 | 1; next: (s: State) => State | null };
 type Failure = { property: string; detail: string };
+class PropertyFailure extends Error {
+  failure: Failure;
+  constructor(failure: Failure) {
+    super(failure.property);
+    this.failure = failure;
+  }
+}
 
 const DAY = '2026-10-31';
 const depthArg = process.argv.indexOf('--depth');
@@ -120,6 +128,15 @@ const ops: Op[] = [
   },
   { name: 'delete', slot: 0, words: 'delete the first entry', next: (s) => (s.entries.length ? { ...s, entries: s.entries.slice(1), rejected: false } : null) },
   { name: 'reopen', slot: 0, words: 'close and reopen the database file, then migrate', next: (s) => ({ ...s, rejected: false }) },
+  {
+    name: 'restore', slot: 0, words: 'export a backup as JSON, parse it, restore it into a new database file, and use that file',
+    next: (s) => ({ ...s, rejected: false }),
+  },
+  {
+    name: 'failedRestores', slot: 0,
+    words: 'try to restore a backup whose entry refers to a missing food, then a valid backup whose middle write fails',
+    next: (s) => ({ ...s, rejected: false }),
+  },
 ];
 
 function compareEntries(expected: ExpectedEntry[], actual: Entry[]): Failure | null {
@@ -150,6 +167,61 @@ function compareFoods(s: State, actual: Food[]): Failure | null {
   return { property: actual.some((f) => archived.includes(f.id)) ? 'F2 archive-hides-only' : 'F1 food-record-fidelity', detail };
 }
 
+// Archived foods are hidden from search but must stay stored exactly as last saved. Read with SQL,
+// not through the code under check.
+async function compareArchived(db: Db, s: State): Promise<Failure | null> {
+  const expected = s.slots
+    .filter((x): x is NonNullable<Slot> => x !== null && x.archived)
+    .map(({ id, t }) => ({ id, name: t.form.name, basis: t.form.basis, ...t.per100, serving: t.serving, barcode: t.barcode }))
+    .sort((a, b) => a.id - b.id);
+  const rows = await db.getAllAsync<Omit<Food, 'serving'> & { servingName: string | null; servingAmount: number | null }>(
+    `SELECT id, name, basis, calories, protein, carbs, fat, serving_name AS servingName, serving_amount AS servingAmount, barcode
+     FROM foods WHERE archived = 1 ORDER BY id`, [],
+  );
+  const actual = rows.map(({ servingName, servingAmount, ...f }) => ({ ...f, serving: servingName === null ? null : { name: servingName, amount: servingAmount } }));
+  if (isDeepStrictEqual(expected, actual)) return null;
+  return { property: 'F3 archived-food-kept', detail: `expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(actual)}` };
+}
+
+// Every stored row, read with SQL, so a failed restore can be compared with the data before it.
+async function dump(db: Db): Promise<string> {
+  const foods = await db.getAllAsync('SELECT * FROM foods ORDER BY id', []);
+  const entries = await db.getAllAsync('SELECT * FROM diary_entries ORDER BY id', []);
+  return JSON.stringify({ foods, entries });
+}
+
+// Both restores must fail and leave every row as it was: the bad file before any write, the good
+// one by rolling back. Its delete and earlier inserts have run when the middle insert fails.
+async function failedRestores(db: Db): Promise<void> {
+  const before = await dump(db);
+  const backup = await exportBackup(db);
+  const fail = (detail: string) => {
+    throw new PropertyFailure({ property: 'B1 failed-restore-changes-nothing', detail });
+  };
+  const dangling = { ...backup, diaryEntries: [...backup.diaryEntries, { ...extraEntry(backup), foodId: 999, amount: 1, unit: 'g' as const }] };
+  if (!('error' in parseBackup(JSON.stringify(dangling)))) fail('a backup with an entry for missing food 999 was accepted');
+  const valid = parseBackup(JSON.stringify({ ...backup, diaryEntries: [...backup.diaryEntries, extraEntry(backup)] }));
+  if ('error' in valid) return fail(`a valid backup was rejected: ${valid.error}`);
+  const middle = Math.ceil((valid.backup.foods.length + valid.backup.diaryEntries.length) / 2);
+  let seen = 0;
+  const failing: Db = {
+    ...db,
+    runAsync: async (sql, params) => {
+      if (sql.trimStart().startsWith('INSERT') && ++seen === middle) throw new Error('injected write failure');
+      return db.runAsync(sql, params);
+    },
+  };
+  const outcome = await restoreBackup(failing, valid.backup).then(() => 'completed', (error) => String(error));
+  if (outcome !== 'Error: injected write failure') fail(`restore with a failing middle write ${outcome === 'completed' ? 'completed' : `threw ${outcome}`}`);
+  const after = await dump(db);
+  if (after !== before) fail(`rows changed\n  before ${before}\n  after  ${after}`);
+}
+
+function extraEntry(backup: Backup) {
+  const id = Math.max(0, ...backup.diaryEntries.map((e) => e.id)) + 1;
+  return { id, day: DAY, label: 'Extra', calories: 1, protein: null, carbs: null, fat: null, foodId: null, amount: null, unit: null };
+}
+
 // Every op sequence of exactly `depth` the UI can reach.
 function* sequences(s: State, depth: number, prefix: Op[] = []): Generator<Op[]> {
   if (prefix.length === depth) return yield prefix;
@@ -165,7 +237,7 @@ async function parsedFood(t: Template) {
   return parsed.food;
 }
 
-// Drives the real code the way FoodPanel and DiaryScreen do. Returns whether logPortion rejected.
+// Drives the real code the way Diary.tsx and BackupSettings.tsx do. Returns whether logPortion rejected.
 async function apply(db: Db, op: Op, before: State, after: State): Promise<boolean> {
   const slot = before.slots[op.slot] ?? after.slots[op.slot];
   if (op.name.startsWith('save')) {
@@ -189,13 +261,15 @@ async function apply(db: Db, op: Op, before: State, after: State): Promise<boole
     await updateEntry(db, (await listEntries(db, DAY))[0].id, parsed.entry);
   } else if (op.name === 'delete') {
     await deleteEntry(db, (await listEntries(db, DAY))[0].id);
+  } else if (op.name === 'failedRestores') {
+    await failedRestores(db);
   }
   return false;
 }
 
 async function run(legacy: boolean, seq: Op[]): Promise<{ failure: Failure; steps: number } | null> {
   const dir = mkdtempSync(join(SCRATCH, 'nutrition-check-'));
-  const path = join(dir, 'nutrition.db');
+  let path = join(dir, 'nutrition.db');
   let { db, close } = openTestDb(path);
   let s: State = { slots: [null, null], entries: legacy ? [LEGACY] : [], saves: 0, rejected: false };
   let step = 0;
@@ -213,16 +287,26 @@ async function run(legacy: boolean, seq: Op[]): Promise<{ failure: Failure; step
         ({ db, close } = openTestDb(path));
         await migrate(db);
       }
+      if (op.name === 'restore') {
+        const parsed = parseBackup(JSON.stringify(await exportBackup(db)));
+        if ('error' in parsed) throw new Error(`own backup rejected: ${parsed.error}`);
+        close();
+        path = join(dir, `restored-${step}.db`);
+        ({ db, close } = openTestDb(path));
+        await migrate(db);
+        await restoreBackup(db, parsed.backup);
+      }
       const rejected = await apply(db, op, s, next);
       s = next;
       const failure =
         rejected !== s.rejected
           ? { property: 'H4 unit-rejection', detail: `logPortion ${rejected ? 'rejected' : 'accepted'}; the spec says ${s.rejected ? 'reject' : 'accept'}` }
-          : (compareEntries(s.entries, await listEntries(db, DAY)) ?? compareFoods(s, await searchFoods(db, '')));
+          : (compareEntries(s.entries, await listEntries(db, DAY)) ?? compareFoods(s, await searchFoods(db, '')) ?? (await compareArchived(db, s)));
       if (failure) return { failure, steps: step + 1 };
     }
     return null;
   } catch (error) {
+    if (error instanceof PropertyFailure) return { failure: error.failure, steps: step + 1 };
     return { failure: { property: 'X0 no-error', detail: String(error) }, steps: step + 1 };
   } finally {
     close();
@@ -252,7 +336,7 @@ async function main() {
       }
     }
   }
-  console.log(`PASS H1 H2 H3 H4 F1 F2 X0: ${runs} sequences of 1-${DEPTH} ops from ${ops.length}, 2 start states`);
+  console.log(`PASS H1 H2 H3 H4 F1 F2 F3 B1 X0: ${runs} sequences of 1-${DEPTH} ops from ${ops.length}, 2 start states`);
   console.log(`node ${process.version}, SQLite ${v}, ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 
