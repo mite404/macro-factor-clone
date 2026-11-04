@@ -9,6 +9,7 @@ import v3Backup from '../src/features/backup/backup-v3.json';
 import { insertEntry, localDay } from '../src/features/diary/diary';
 import { insertFood } from '../src/features/foods/foods';
 import { saveTargets } from '../src/features/goals/goals';
+import { camera } from './camera';
 import { deleteUsdaKey, saveUsdaKey } from '../src/features/lookup/key';
 import nutellaReply from '../src/features/lookup/off-product-nutella.json';
 import offMissReply from '../src/features/lookup/off-product-not-found.json';
@@ -460,7 +461,7 @@ export const BarcodeSavedFoodOffline: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
-    await expect(await canvas.findByText('Type a barcode')).toBeVisible();
+    await expect(await canvas.findByText('Scan or type a barcode')).toBeVisible();
     await lookUp(canvas, '0 0770 34085 228');
     await expect(await canvas.findByText('In your saved foods')).toBeVisible();
     await expect(canvas.getByText('Found on this phone, so nothing was looked up online.')).toBeVisible();
@@ -692,6 +693,86 @@ export const BarcodeOffFallbackSaveOffline: Story = {
     await lookUp(canvas, '03017620422003');
     await expect(await canvas.findByText('In your saved foods')).toBeVisible();
     await expect([usdaCalls.length, offCalls.length]).toEqual([1, 1]);
+  },
+};
+
+// The camera reports a held barcode three times; only the first starts a lookup.
+export const BarcodeScanOnceAndRescan: Story = {
+  args: {
+    onInit: async () => {
+      Object.assign(camera, { status: 'undetermined', answer: 'granted', requests: 0, scans: Array(3).fill('3017620422003'), mountError: '' });
+      await stubLookups(null, [], [json(nutellaReply), json(nutellaReply)]);
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await expect(camera.requests).toBe(0);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Scan a barcode' }));
+    await expect(await canvas.findByRole('button', { name: nutellaRow })).toBeVisible();
+    await expect(camera.requests).toBe(1);
+    await expect(offCalls).toHaveLength(1);
+    await expect(canvas.getByLabelText('Barcode digits')).toHaveValue('3017620422003');
+
+    await userEvent.click(canvas.getByRole('button', { name: 'Scan a barcode' }));
+    await expect(await canvas.findByRole('button', { name: nutellaRow })).toBeVisible();
+    await expect([camera.requests, offCalls.length]).toEqual([1, 2]);
+  },
+};
+
+// Denied: Settings is offered and re-read on return, and a typed unknown product reaches Create food.
+export const BarcodeScanDeniedTypeUnknown: Story = {
+  args: {
+    onInit: async () => {
+      Object.assign(camera, { status: 'undetermined', answer: 'denied', requests: 0, scans: [], mountError: '' });
+      await stubLookups(null, [], [offMiss]);
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Scan a barcode' }));
+    await expect(await canvas.findByText('Camera access is off')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Open Settings' })).toBeVisible();
+    // Access turned on in Settings: returning to the app re-reads it and opens the camera.
+    camera.status = 'granted';
+    document.dispatchEvent(new Event('visibilitychange'));
+    await expect(await canvas.findByText(/Hold the barcode inside the square/)).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
+    await lookUp(canvas, '0000000000017');
+    await expect(await canvas.findByText('Not in Open Food Facts')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Create food' }));
+    await expect(await canvas.findByDisplayValue('0000000000017')).toBeVisible();
+  },
+};
+
+// The iOS prompt is still open: the scanner waits behind it, neither inviting a scan nor reporting access off.
+export const BarcodeScanPromptOpen: Story = {
+  args: { onInit: async () => { Object.assign(camera, { status: 'undetermined', answer: 'undetermined', requests: 0, scans: [], mountError: '' }); } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Scan a barcode' }));
+    await waitFor(() => expect(camera.requests).toBe(1));
+    await expect(canvas.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    await expect(canvas.queryByText(/Hold the barcode inside the square/)).toBeNull();
+    await expect(canvas.queryByText('Camera access is off')).toBeNull();
+  },
+};
+
+// A media reset the camera recovered from keeps it open; any other mount error reports a failed start.
+export const BarcodeScanMountErrors: Story = {
+  args: { onInit: async () => { Object.assign(camera, { status: 'granted', answer: 'granted', requests: 0, scans: [], mountError: 'Camera session was reset' }); } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Scan a barcode' }));
+    await expect(await canvas.findByText(/Hold the barcode inside the square/)).toBeVisible();
+    await expect(canvas.queryByText("The camera couldn't start")).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
+    camera.mountError = 'Camera could not be started - busy';
+    await userEvent.click(canvas.getByRole('button', { name: 'Scan a barcode' }));
+    await expect(await canvas.findByText("The camera couldn't start")).toBeVisible();
   },
 };
 

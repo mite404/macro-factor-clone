@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { migrate } from '../../storage/migrations.ts';
 import { openTestDb } from '../../storage/testDb.ts';
 import { insertEntry, listEntries, localDay } from '../diary/diary.ts';
-import { archiveFood, insertFood, logPortion, parseGtin, updateFood } from '../foods/foods.ts';
+import { archiveFood, expandUpcE, insertFood, logPortion, parseGtin, updateFood } from '../foods/foods.ts';
 import { exportBackup, parseBackup, restoreBackup } from '../backup/backup.ts';
 import { lookupBarcode, lookupOff, OFF_SOURCE, TIMEOUT_MS, USDA_SOURCE, USER_AGENT, type Lookup, type OffResult } from './lookup.ts';
 
@@ -62,6 +62,16 @@ test('validates check digits and pads every GTIN length to the same 14 digits', 
   assert.deepEqual(parseGtin('36000291452'), { error: 'A barcode has 8, 12, 13, or 14 digits' }, 'a dropped leading zero is not padded back');
   assert.deepEqual(parseGtin('03600029145a'), { error: 'Use digits only' });
   assert.deepEqual(parseGtin(''), { error: 'Enter the digits under the barcode' });
+});
+
+test('expands a scanned UPC-E to the UPC-A its check digit belongs to', () => {
+  // Each last-digit rule (0-2, 3, 4, 5-9), the 2/3 boundary, and number system 1. 04963406 is the Coca-Cola can example.
+  for (const [upcE, upcA] of [['04963406', '049000006346'], ['01234514', '012100003454'], ['01234523', '012200003453'], ['01234531', '012300000451'],
+    ['01234543', '012340000053'], ['01234565', '012345000065'], ['11234562', '112345000062']]) {
+    assert.equal(expandUpcE(upcE), upcA);
+    assert.ok('gtin' in parseGtin(expandUpcE(upcE)), upcE);
+  }
+  assert.equal(expandUpcE('24963406'), '24963406', 'only number systems 0 and 1 are UPC-E');
 });
 
 test('a saved barcode is found in any equivalent form with no key read or request', async () => {

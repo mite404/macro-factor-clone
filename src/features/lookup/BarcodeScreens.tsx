@@ -1,11 +1,12 @@
-// The logger's Barcode tab (typed codes; the camera comes in ticket 07) and the provider record review.
+// The logger's Barcode tab (camera or typed codes) and the provider record review.
 // Both share the dark logger sheet with FoodSearch and FoodDetail: ribbon header, one body surface,
 // a pinned footer for the primary action, and FoodDetail's title, macro summary, and facts card.
-import { ActivityIndicator, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, TextInput, View } from 'react-native';
 
 import { Button, Label, Macros, palettes, Phone, Row, usePalette } from '../../ui';
 import { describe, FoodFacts, FoodRow, FoodTitle, LoggerBody, LoggerFooter, LoggerHeader, round, type LoggerTab } from '../diary/LoggingScreens';
 import type { Food } from '../foods/foods';
+import { Scanner } from './Scanner';
 import { OFF_SOURCE, type Lookup, type Miss, type OffResult, type ProviderFood } from './lookup';
 
 type Outcome = { title: string; text: string; action?: 'retry' | 'key' };
@@ -73,8 +74,8 @@ function Result({ result, looking, onFood, onReview, onRetry, onOff, onKey, onCr
       {result ? 'Asking Open Food Facts…' : 'Checking saved foods, then USDA and Open Food Facts…'}
     </Label>
   </Row>;
-  if (!result || result.kind === 'invalid') return <Heading title="Type a barcode"
-    text="Enter the digits printed under the barcode. Your saved foods are checked first, offline. Then USDA FoodData Central, if you've added your key in Settings, and Open Food Facts." />;
+  if (!result || result.kind === 'invalid') return <Heading title="Scan or type a barcode"
+    text="Tap ▥ to scan with the camera, or enter the digits printed under the barcode. Your saved foods are checked first, offline. Then USDA FoodData Central, if you've added your key in Settings, and Open Food Facts." />;
   if (result.kind === 'saved') return <View>
     <Heading title="In your saved foods" text="Found on this phone, so nothing was looked up online." />
     {result.foods.map(food => <FoodRow key={food.id} food={food} onPress={() => onFood(food)} />)}
@@ -114,12 +115,12 @@ function Result({ result, looking, onFood, onReview, onRetry, onOff, onKey, onCr
 }
 
 /**
- * The Barcode tab: a typed code, saved-food matches, exact USDA matches, an Open Food Facts
+ * The Barcode tab: a scanned or typed code, saved-food matches, exact USDA matches, an Open Food Facts
  * product, or a recoverable outcome.
  */
-export function BarcodeLookup({ summary, code, result, looking, failure, onCode, onLookUp, onOff, onFood, onReview, onKey, onCreate, onClose, onTab }: {
-  summary: string; code: string; result: Lookup | null; looking: boolean; failure: string; onCode: (code: string) => void;
-  onLookUp: () => void; onOff: (miss: Miss) => void; onFood: (food: Food) => void; onReview: (food: ProviderFood) => void; onKey: () => void;
+export function BarcodeLookup({ summary, code, result, looking, scanning, failure, onCode, onLookUp, onScanner, onScan, onOff, onFood, onReview, onKey, onCreate, onClose, onTab }: {
+  summary: string; code: string; result: Lookup | null; looking: boolean; scanning: boolean; failure: string;
+  onCode: (code: string) => void; onLookUp: () => void; onScanner: (open: boolean) => void; onScan: (code: string) => void; onOff: (miss: Miss) => void; onFood: (food: Food) => void; onReview: (food: ProviderFood) => void; onKey: () => void;
   onCreate: () => void; onClose: () => void; onTab: (tab: LoggerTab) => void;
 }) {
   const p = palettes.dark;
@@ -134,11 +135,16 @@ export function BarcodeLookup({ summary, code, result, looking, failure, onCode,
           style={{ flex: 1, minWidth: 0, minHeight: 46, paddingHorizontal: 15, borderRadius: 24, color: p.text,
             backgroundColor: p.field, fontSize: 14, borderWidth: 1, borderColor: error ? p.danger : 'transparent' }} />
         <Button primary label="Look up barcode" disabled={looking} onPress={onLookUp}>Look up</Button>
+        <Button label="Scan a barcode" disabled={looking || scanning} onPress={() => {
+          Keyboard.dismiss();
+          onScanner(true);
+        }}>▥</Button>
       </Row>
     </View>}>
     <LoggerBody>
-      <Result result={result} looking={looking} onFood={onFood} onReview={onReview} onRetry={onLookUp} onOff={onOff} onKey={onKey}
-        onCreate={onCreate} />
+      {scanning ? <Scanner onScan={onScan} onCancel={() => onScanner(false)} />
+        : <Result result={result} looking={looking} onFood={onFood} onReview={onReview} onRetry={onLookUp} onOff={onOff} onKey={onKey}
+          onCreate={onCreate} />}
     </LoggerBody>
   </Phone>;
 }

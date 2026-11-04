@@ -134,13 +134,59 @@ the results. There are no open prerequisite PRs and no prerequisite CI blocker.
 | 04 | Manual targets | [PR #6][pr6], merged |
 | 05 | USDA lookup | [PR #7][pr7], merged |
 | 06 | Open Food Facts fallback | [PR #8][pr8], merged by worker; oracle corrections pending |
-| 07 | Camera scanning | Queued after 06 |
+| 07 | Camera scanning | Draft [PR #10][pr10]; Fable oracle review pending; native acceptance pending |
 | 08 | Weighed recipes | Queued after 07 |
 | 09 | Copy diary entries | Queued after 08 |
 | 10 | Weight history | Queued after 09 |
 
 Feature delivery is 4 of 8 merged, but ticket 06 has unresolved oracle findings and ticket 07 is
 held. Last confirmed remote main is [4d2c9ca][main06]. No Mac satellite has been started.
+
+## Ticket 07: camera scanning
+
+[Implementation thread][t07-thread]. The owner started ticket 07 on November 4 while the ticket 06
+oracle corrections were still off main. Those touch `lookup.ts`; this ticket does not.
+
+The Barcode tab's ▥ button opens `expo-camera` 58.0.14 for EAN-13, EAN-8, UPC-A and UPC-E codes.
+Permission is requested on that tap, never at startup. A ref lock accepts one detection per opening;
+the scan closes the camera, fills the field, and runs the existing resolver. ▥ rescans explicitly.
+Leaving the tab or a result unmounts the camera. expo-camera stops its session in the background and
+restarts it on return; no app code handles that. Denial shows Allow camera or Open Settings, with
+typed entry kept.
+`NSCameraUsageDescription` is set; the microphone description is omitted. No frames are stored.
+
+Observed in this orb: typecheck, lint, 35 Node tests, iOS export, 39 Storybook stories, and the
+depth-4 nutrition-history check passed. A Storybook `expo-camera` stand-in fires each code on every
+render; removing the lock made `BarcodeScanOnceAndRescan` fail. The real web module rendered the
+denied state in headless Chromium. Untested: a real camera, the iOS prompt, background/foreground,
+VoiceOver, and the native build. The physical iPhone 12 Pro gate is pending.
+
+A pre-review by a generic Amp Task subagent, not the required Fable 5.1 xhigh oracle, found one high
+issue. A scanned UPC-E was read as EAN-8, so its check digit failed or it resolved to another GTIN.
+Scans of type `upc_e` now expand to UPC-A first. A Node test covers each rule, the 2/3 boundary, and
+number system 1; the subagent found 0 mismatches against its own expander over all 2,000,000 codes.
+Typed 8-digit codes still read as EAN-8. The PR was opened ready, then returned to draft when main's
+review gate arrived.
+
+The owner had all three of its low findings fixed. Camera access is off now shows only once access
+is denied, not behind the open iOS prompt. A media reset expo-camera recovers from no longer closes
+the camera, and a failed start no longer claims the device has no camera. iOS gives expo-camera no
+way to report a missing camera, so the Simulator still shows an empty square. Returning to the app,
+for example from Settings, re-reads camera permission. `BarcodeScanPromptOpen`,
+`BarcodeScanMountErrors`, and `BarcodeScanDeniedTypeUnknown` each fail with its fix reverted; 41
+stories pass. Fable 5.1 xhigh oracle review started on `4924f9c` in [its thread][t07-review]; the
+re-read came after that head.
+
+[The Fable 5.1 oracle][t07-review] reviewed base `74bddb0` to heads `4924f9c` and `2567cb8`: no high
+or medium findings and six lows. Its effort level was not observable from inside the run. The owner
+chose to fix lows 1 and 4, note 2 and 3, and leave 5 and 6. The Settings re-read now swallows a
+rejected permission read, and the scan hint shows only once access is granted, not behind the open
+iOS prompt. Low 2: iOS reports Screen Time or device-management restriction as denied, so a
+restricted phone still sees Open Settings, which cannot help; this layer cannot tell the two apart.
+Low 3: the AppState re-read is exercised only through the Storybook stand-in on web. iOS normally
+terminates the app when camera access changes in Settings, so the iOS path is covered by the scanner
+remounting on relaunch. The re-read is unverified on a device. Left as is: a UPC-E scan fills the
+field with its expanded 12-digit UPC-A, and Allow camera is unreachable on iOS.
 
 ## Ticket 06 oracle corrections are required after shipping
 
@@ -506,12 +552,15 @@ No merges are authorized by this record. No native build has been verified by th
 [pr6]: https://github.com/mite404/macro-factor-clone/pull/6
 [pr7]: https://github.com/mite404/macro-factor-clone/pull/7
 [pr8]: https://github.com/mite404/macro-factor-clone/pull/8
+[pr10]: https://github.com/mite404/macro-factor-clone/pull/10
 [main06]:
   https://github.com/mite404/macro-factor-clone/commit/4d2c9ca30594542a9161ee4668bbb1a262abd31f
 [coordinator]: https://ampcode.com/threads/T-01a19290-a404-75d0-9b1c-735ad66c0b4e
 [ui-thread]: https://ampcode.com/threads/T-f3543611-9f9b-44f2-8037-090845203361
 [history-thread]: https://ampcode.com/threads/T-01a1a39d-c369-77ac-9a80-b1993d5d057a
 [ci-thread]: https://ampcode.com/threads/T-118f58c0-7f55-46e6-9d1f-83d662f2b3dc
+[t07-thread]: https://ampcode.com/threads/T-4bd49a1c-f754-4a63-8218-563690c638dd
+[t07-review]: https://ampcode.com/threads/T-4f9e25ad-9fd5-4eb6-89fe-07f62a8955c1
 [backup-thread]: https://ampcode.com/threads/T-92446160-d0c9-4113-8d29-e772c221d832
 [targets-thread]: https://ampcode.com/threads/T-726bca15-3a60-4507-a2a7-e12b1b49595e
 [lookup-thread]: https://ampcode.com/threads/T-68986624-b1ed-44fc-be7b-6ae0d6bed2eb

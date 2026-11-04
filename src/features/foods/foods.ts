@@ -32,8 +32,23 @@ const manual: Provenance = { brand: null, source: null };
 const scale = (value: number | null, factor: number) => (value === null ? null : (value * factor) / 100);
 
 /**
+ * Expands a UPC-E code, as a camera reports it, to its 12-digit UPC-A. Other codes pass through
+ * unchanged for `parseGtin` to judge. The UPC-E check digit belongs to the UPC-A.
+ */
+export function expandUpcE(code: string): string {
+  if (!/^[01]\d{7}$/.test(code)) return code;
+  const [n, a, b, c, d, e, last, check] = code;
+  const body = last <= '2' ? `${a}${b}${last}0000${c}${d}${e}`
+    : last === '3' ? `${a}${b}${c}00000${d}${e}`
+    : last === '4' ? `${a}${b}${c}${d}00000${e}`
+    : `${a}${b}${c}${d}${e}0000${last}`;
+  return n + body + check;
+}
+
+/**
  * Validates typed barcode digits, ignoring spaces and hyphens, including the GS1 check digit.
- * ponytail: an 8-digit code is read as EAN-8; expand UPC-E when the camera (ticket 07) reports it.
+ * ponytail: typed 8-digit codes are read as EAN-8; only scans know a code is UPC-E. Add a typed
+ * UPC-E choice if the owner types those.
  */
 export function parseGtin(text: string): { gtin: Gtin; digits: string } | { error: string } {
   const digits = text.replace(/[\s-]/g, '');

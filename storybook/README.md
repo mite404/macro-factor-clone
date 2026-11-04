@@ -31,7 +31,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 36 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 41 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -68,7 +68,15 @@ adds dependencies and needs the owner's approval.
 | `BarcodeOffFallbackSaveOffline` | USDA miss falls back to Open Food Facts; review, license link, save, log 20 g, repeat lookup offline |
 | `BarcodeUsdaLimitOffersOff` | USDA 429 asks nothing else; Try Open Food Facts, its 503, then Try again sends nothing during the cooldown |
 | `BarcodeOffLargeText` | No key: Open Food Facts directly; unknown protein, fat, and net-only carbs stay "?"; 1.5× text keeps figures whole |
+| `BarcodeScanOnceAndRescan` | One permission request; three repeated detections make one lookup; an explicit rescan makes one more |
+| `BarcodeScanDeniedTypeUnknown` | Denied camera offers Settings, re-reads access on return; a typed unknown code reaches Create food |
+| `BarcodeScanPromptOpen` | While the iOS prompt is open the scanner waits behind it, with no scan hint and no access-off message |
+| `BarcodeScanMountErrors` | A recovered media reset keeps the camera open; another mount error reports a failed start |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
+
+`main.ts` also aliases `expo-camera` to `camera.tsx`. Its permission answers follow iOS, and its
+camera reports the story's codes on every render, so the scanner's one-scan lock is exercised.
+It proves wiring, not real camera behavior.
 
 Barcode stories stub `window.fetch` for `api.nal.usda.gov` and `world.openfoodfacts.org` with
 recorded fixtures and use a fake key held in memory by `key.web.ts`. They never call either
