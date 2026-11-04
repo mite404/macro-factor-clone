@@ -8,6 +8,9 @@ layout. `src/features/lookup/BarcodeScreens.tsx` adds the logger's Barcode tab, 
 reference's Scan tab, and a USDA or Open Food Facts record review that follows `FoodDetail`.
 `src/features/recipes/RecipeScreens.tsx` adds the logger's Recipes tab and recipe detail on the dark
 sheet, and a builder and ingredient picker that follow the light `RecipeBuilder` reference.
+`src/features/weight/WeightHistory.tsx` adds weight history, opened from the scale button beside
+the food log's date. It follows the dark weight `Trend` reference, with real weigh-ins in place of
+its fixture lines, and a weigh-in form that follows `TargetsForm`.
 `src/features/diary/Diary.tsx` wires them to SQLite. The
 `App` stories render that production app.
 
@@ -33,7 +36,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 45 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 50 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -55,7 +58,7 @@ adds dependencies and needs the owner's approval.
 | `SavedFoodCreateAndLog` | Empty search, create from the search text, validation, 150 g portion |
 | `SavedFoodEditKeepsHistory` | Edit food calories; the earlier diary snapshot stays 184.5 kcal |
 | `MeasuredServingWithKeyboard` | Per-100 ml food, Space selects the serving radio, 2 bottles = 660 ml |
-| `BackupExport` | The downloaded backup equals the restored version 3 fixture, archived food, brand, and targets included |
+| `BackupExport` | The downloaded backup equals the restored version 5 fixture, archived food, brand, targets, recipes, weigh-ins, and unit included |
 | `BackupRestoreConfirmation` | Counts and warning, Cancel keeps data, Replace all data replaces it |
 | `BackupRestoresTargets` | A version 2 file's targets are counted, restored, and compared |
 | `BackupRestoreRejectsInvalidFiles` | Malformed, newer-format, and dangling-food files leave data unchanged |
@@ -78,6 +81,11 @@ adds dependencies and needs the owner's approval.
 | `RecipeEditKeepsHistory` | Removing an ingredient and reweighing changes the next portion, not the one already logged |
 | `RecipeManyIngredientsScrolls` | Ten ingredients keep the draft, and the last one scrolls clear of Save |
 | `CopyEntriesToToday` | Cancel adds nothing; 2 of 3 entries (580 kcal) copied to a 120 kcal day make 700; three taps make one batch |
+| `WeightEmpty` | No weigh-ins shows no average or chart; 0 kg rejected; one weigh-in reads as one sample |
+| `WeightTrendAddEditDelete` | 80 and 82 kg six days apart average 81; a day-8 84 kg averages 83; edit to 86, then delete |
+| `WeightReplaceAndPounds` | A second weigh-in today warns and replaces; 100 lb shows as 45.4 kg; an earlier day adds |
+| `WeightLongHistoryLargeText` | 53 weigh-ins with gaps: 30-day chart of 20, every row listed, 1.5× text unclipped above Log weigh-in |
+| `WeightUnitSaveFails` | A failed unit save on the history screen shows an alert and keeps kg |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
 
 `main.ts` also aliases `expo-camera` to `camera.tsx`. Its permission answers follow iOS, and its

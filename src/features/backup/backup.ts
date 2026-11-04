@@ -2,6 +2,7 @@
 import type { Db } from '../../storage/migrations';
 import { addDays, type Unit } from '../diary/diary.ts';
 import { NUTRIENTS, type Nutrient } from '../goals/goals.ts';
+import { loadWeightUnit, type Weight, type WeightUnit } from '../weight/weight.ts';
 
 // Rows mirror the SQLite tables column for column: ids, explicit days, units, and null = unknown.
 export type BackupFood = {
@@ -58,6 +59,8 @@ export type Backup = {
   targets: BackupTarget[];
   recipes: BackupRecipe[];
   recipeIngredients: BackupIngredient[];
+  weights: Weight[];
+  weightUnit: WeightUnit;
 };
 export type BackupSummary = {
   foods: number;
@@ -68,10 +71,11 @@ export type BackupSummary = {
   lastDay: string | null;
   targets: number;
   recipes: number;
+  weights: number;
 };
 
 export const BACKUP_FORMAT = 'nutrition-diary-backup';
-export const BACKUP_VERSION = 4;
+export const BACKUP_VERSION = 5;
 /** Larger files are refused before they are read. Years of daily logging stay far below this. */
 export const MAX_BACKUP_BYTES = 20 * 1024 * 1024;
 export const TOO_LARGE = 'This file is larger than 20 MB, too large for a backup.';
@@ -102,13 +106,15 @@ const targetFields: Record<keyof BackupTarget, Check> = {
   nutrient: (v) => NUTRIENTS.some(([key]) => key === v), amount: positive,
 };
 const recipeFields: Record<keyof BackupRecipe, Check> = { id, name: nonEmpty, finishedGrams: positive };
+const weightFields: Record<keyof Weight, Check> = { day, kg: positive };
 const ingredientFields: Record<keyof BackupIngredient, Check> = {
   id, recipeId: id, foodId: id, name: nonEmpty, grams: positive, servings: orNull(positive), servingName: orNull(nonEmpty),
   calories: amount, protein: orNull(amount), carbs: orNull(amount), fat: orNull(amount),
 };
-// Collections each version holds. Version 1 predates targets, and versions 1-3 predate recipes.
+// Collections each version holds. Version 1 predates targets, versions 1-3 recipes, and 1-4 weights.
 const collections = (version: number) => [
   'foods', 'diaryEntries', ...(version >= 2 ? ['targets'] : []), ...(version >= 4 ? ['recipes', 'recipeIngredients'] : []),
+  ...(version >= 5 ? ['weights'] : []),
 ];
 // Food fields each version holds. Versions 1 and 2 predate brand.
 const { brand: _, ...foodFieldsV1 } = foodFields;
@@ -145,18 +151,20 @@ function backupError(raw: unknown): string | null {
   if ((raw.version as number) > BACKUP_VERSION) {
     return `This backup was made by a newer version of the app (format ${raw.version}). Update the app to restore it.`;
   }
-  const expected = ['format', 'version', 'exportedAt', ...collections(raw.version as number)];
+  const expected = ['format', 'version', 'exportedAt', ...collections(raw.version as number), ...((raw.version as number) >= 5 ? ['weightUnit'] : [])];
   const extra = Object.keys(raw).find((key) => !expected.includes(key));
   if (extra !== undefined) return `The backup has an unexpected field "${extra}".`;
   if (!text(raw.exportedAt)) return 'The backup has no export date.';
   for (const key of collections(raw.version as number)) if (!Array.isArray(raw[key])) return `The backup's ${key} is missing.`;
+  if ((raw.version as number) >= 5 && raw.weightUnit !== 'kg' && raw.weightUnit !== 'lb') return 'The backup has no valid weight unit.';
   const foods = raw.foods as BackupFood[];
   const entries = raw.diaryEntries as BackupEntry[];
   const recipes = (raw.recipes ?? []) as BackupRecipe[];
   const ingredients = (raw.recipeIngredients ?? []) as BackupIngredient[];
   const problem = recordError('Food', foods, foodFieldsFor(raw.version as number)) ?? recordError('Diary entry', entries, entryFields)
     ?? recordError('Target', (raw.targets ?? []) as unknown[], targetFields, 'nutrient')
-    ?? recordError('Recipe', recipes, recipeFields) ?? recordError('Recipe ingredient', ingredients, ingredientFields);
+    ?? recordError('Recipe', recipes, recipeFields) ?? recordError('Recipe ingredient', ingredients, ingredientFields)
+    ?? recordError('Weigh-in', (raw.weights ?? []) as unknown[], weightFields, 'day');
   if (problem) return `${problem}.`;
   const badFood = foods.find((f) => (f.servingName === null) !== (f.servingAmount === null));
   if (badFood) return `Food ${badFood.id} has a serving name without an amount, or an amount without a name.`;
@@ -191,6 +199,7 @@ export async function exportBackup(db: Db, now = new Date()): Promise<Backup> {
   const targets = await db.getAllAsync<BackupTarget>('SELECT nutrient, amount FROM targets ORDER BY nutrient', []);
   const recipes = await db.getAllAsync<BackupRecipe>('SELECT id, name, finished_grams AS finishedGrams FROM recipes ORDER BY id', []);
   const recipeIngredients = await db.getAllAsync<BackupIngredient>(`SELECT ${ingredientColumns} FROM recipe_ingredients ORDER BY id`, []);
+  const weights = await db.getAllAsync<Weight>('SELECT day, kg FROM weights ORDER BY day', []);
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
@@ -200,6 +209,8 @@ export async function exportBackup(db: Db, now = new Date()): Promise<Backup> {
     targets,
     recipes,
     recipeIngredients,
+    weights,
+    weightUnit: await loadWeightUnit(db),
   };
 }
 
@@ -219,8 +230,9 @@ export function parseBackup(json: string): { backup: Backup } | { error: string 
   }
   const error = backupError(raw);
   if (error) return { error };
-  const valid = raw as Omit<Backup, 'version' | 'targets' | 'foods' | 'recipes' | 'recipeIngredients'> & {
+  const valid = raw as Omit<Backup, 'version' | 'targets' | 'foods' | 'recipes' | 'recipeIngredients' | 'weights' | 'weightUnit'> & {
     targets?: BackupTarget[]; foods: Omit<BackupFood, 'brand'>[]; recipes?: BackupRecipe[]; recipeIngredients?: BackupIngredient[];
+    weights?: Weight[]; weightUnit?: WeightUnit;
   };
   return {
     backup: {
@@ -230,6 +242,8 @@ export function parseBackup(json: string): { backup: Backup } | { error: string 
       targets: valid.targets ?? [],
       recipes: valid.recipes ?? [],
       recipeIngredients: valid.recipeIngredients ?? [],
+      weights: valid.weights ?? [],
+      weightUnit: valid.weightUnit ?? 'kg',
     },
   };
 }
@@ -246,17 +260,20 @@ export function summarize(backup: Backup): BackupSummary {
     lastDay: days.at(-1) ?? null,
     targets: backup.targets.length,
     recipes: backup.recipes.length,
+    weights: backup.weights.length,
   };
 }
 
 /**
- * Replaces all foods, diary entries, targets, and recipes with the backup's, in one transaction.
+ * Replaces all foods, diary entries, targets, recipes, weigh-ins, and the weight unit with the
+ * backup's, in one transaction.
  * @throws If any write fails. The transaction rolls back, so the existing data stays.
  */
 export async function restoreBackup(db: Db, backup: Backup): Promise<void> {
   await db.execAsync('BEGIN');
   try {
-    await db.execAsync('DELETE FROM recipe_ingredients; DELETE FROM recipes; DELETE FROM diary_entries; DELETE FROM foods; DELETE FROM targets;');
+    await db.execAsync(`DELETE FROM recipe_ingredients; DELETE FROM recipes; DELETE FROM diary_entries; DELETE FROM foods;
+      DELETE FROM targets; DELETE FROM weights; DELETE FROM preferences;`);
     for (const f of backup.foods) {
       await db.runAsync(
         `INSERT INTO foods (id, name, basis, calories, protein, carbs, fat, serving_name, serving_amount, barcode,
@@ -285,6 +302,8 @@ export async function restoreBackup(db: Db, backup: Backup): Promise<void> {
         [i.id, i.recipeId, i.foodId, i.name, i.grams, i.servings, i.servingName, i.calories, i.protein, i.carbs, i.fat],
       );
     }
+    for (const w of backup.weights) await db.runAsync('INSERT INTO weights (day, kg) VALUES (?, ?)', [w.day, w.kg]);
+    await db.runAsync('INSERT INTO preferences (id, weight_unit) VALUES (1, ?)', [backup.weightUnit]);
     await db.execAsync('COMMIT');
   } catch (error) {
     await db.execAsync('ROLLBACK');

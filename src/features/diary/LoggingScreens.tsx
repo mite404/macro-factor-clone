@@ -29,7 +29,8 @@ function formatMacro(total: MacroTotal, count: number): string {
   return `${total.missing > 0 ? '≥' : ''}${round(total.grams)} g`;
 }
 
-function formatDay(day: string, options: Intl.DateTimeFormatOptions): string {
+/** Formats a YYYY-MM-DD calendar day without shifting it into the device's timezone. */
+export function formatDay(day: string, options: Intl.DateTimeFormatOptions): string {
   const [y, m, d] = day.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, { timeZone: 'UTC', ...options });
 }
@@ -160,9 +161,9 @@ function TargetsCard({ rows, onTargets }: { rows: TargetRow[]; onTargets: () => 
   </View>;
 }
 
-function TimelineBody({ day, entries, targets, notice, onDay, onEntry, onCopy, onSettings, onTargets }: {
+function TimelineBody({ day, entries, targets, notice, onDay, onEntry, onCopy, onSettings, onTargets, onWeight }: {
   day: string; entries: Entry[]; targets: Targets; notice?: string; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
-  onCopy: () => void; onSettings: () => void; onTargets: () => void;
+  onCopy: () => void; onSettings: () => void; onTargets: () => void; onWeight: () => void;
 }) {
   const p = usePalette();
   const totals = dayTotals(entries);
@@ -178,8 +179,7 @@ function TimelineBody({ day, entries, targets, notice, onDay, onEntry, onCopy, o
   const spoken = [totals.protein, totals.fat, totals.carbs].map(t => formatMacro(t, entries.length).replace('≥', 'at least '));
   return <View style={{ padding: 16, gap: 18 }}>
     <Row style={{ justifyContent: 'space-between' }}>
-      {/* Balances the settings button so the date stays centred. */}
-      <View style={{ width: 44 }} />
+      <Chevron label="Weight history" onPress={onWeight}>⚖︎</Chevron>
       <Row style={{ gap: 24 }}>
         <Chevron label="Previous day" value={dayName(day)} onPress={() => onDay(addDays(day, -1))}>‹</Chevron>
         <Label accessibilityRole="header" style={{ minWidth: 120, textAlign: 'center' }}>{dayName(day)}</Label>
@@ -232,14 +232,14 @@ function LogFooter({ onSearch, onBarcode, onQuickAdd }: { onSearch: () => void; 
 }
 
 /** The day's food log: day picker, totals against the current targets, and entries; search opens the logger. */
-export function FoodLog({ day, entries, targets, notice, onDay, onEntry, onCopy, onSearch, onBarcode, onQuickAdd, onSettings, onTargets }: {
+export function FoodLog({ day, entries, targets, notice, onDay, onEntry, onCopy, onSearch, onBarcode, onQuickAdd, onSettings, onTargets, onWeight }: {
   day: string; entries: Entry[]; targets: Targets; notice?: string; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
   onCopy: () => void; onSearch: () => void; onBarcode: () => void; onQuickAdd: () => void; onSettings: () => void;
-  onTargets: () => void;
+  onTargets: () => void; onWeight: () => void;
 }) {
   return <Phone dark footer={<LogFooter onSearch={onSearch} onBarcode={onBarcode} onQuickAdd={onQuickAdd} />}>
     <TimelineBody day={day} entries={entries} targets={targets} notice={notice} onDay={onDay} onEntry={onEntry}
-      onCopy={onCopy} onSettings={onSettings} onTargets={onTargets} />
+      onCopy={onCopy} onSettings={onSettings} onTargets={onTargets} onWeight={onWeight} />
   </Phone>;
 }
 

@@ -5,10 +5,11 @@ import App from '../src/App';
 import { restoreBackup, type Backup } from '../src/features/backup/backup';
 import v1Backup from '../src/features/backup/backup-v1.json';
 import v2Backup from '../src/features/backup/backup-v2.json';
-import v4Backup from '../src/features/backup/backup-v4.json';
+import v5Backup from '../src/features/backup/backup-v5.json';
 import { addDays, insertEntry, localDay } from '../src/features/diary/diary';
 import { insertFood } from '../src/features/foods/foods';
 import { saveTargets } from '../src/features/goals/goals';
+import { insertWeight, saveWeightUnit } from '../src/features/weight/weight';
 import { camera } from './camera';
 import { deleteUsdaKey, saveUsdaKey } from '../src/features/lookup/key';
 import nutellaReply from '../src/features/lookup/off-product-nutella.json';
@@ -290,7 +291,7 @@ export const MeasuredServingWithKeyboard: Story = {
 };
 
 export const BackupExport: Story = {
-  args: { onInit: (db) => restoreBackup(db, v4Backup as Backup) },
+  args: { onInit: (db) => restoreBackup(db, v5Backup as Backup) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const downloads: Blob[] = [];
@@ -308,7 +309,7 @@ export const BackupExport: Story = {
     }
     const exported = JSON.parse(await downloads[0].text());
     await expect(Date.parse(exported.exportedAt)).not.toBeNaN();
-    await expect({ ...exported, exportedAt: v4Backup.exportedAt }).toEqual(v4Backup);
+    await expect({ ...exported, exportedAt: v5Backup.exportedAt }).toEqual(v5Backup);
     await expect(canvas.queryByRole('alert')).toBeNull();
   },
 };
@@ -347,7 +348,7 @@ export const BackupRestoreRejectsInvalidFiles: Story = {
     const dangling = { ...v1Backup, diaryEntries: [{ ...v1Backup.diaryEntries[1], foodId: 3 }] };
     const files: [string, string][] = [
       ['{"format": "nutrition-diary-backup",', 'This file is not valid JSON, so it cannot be a backup.'],
-      [JSON.stringify({ ...v4Backup, version: 5 }), 'This backup was made by a newer version of the app (format 5). Update the app to restore it.'],
+      [JSON.stringify({ ...v5Backup, version: 6 }), 'This backup was made by a newer version of the app (format 6). Update the app to restore it.'],
       [JSON.stringify(dangling), 'Diary entry 7 refers to food 3, which is not in the backup.'],
     ];
     for (const [text, reason] of files) {
@@ -882,7 +883,7 @@ export const RecipeBuildAndLog: Story = {
 export const RecipeEditKeepsHistory: Story = {
   args: {
     onInit: async (db) => {
-      await restoreBackup(db, v4Backup as Backup);
+      await restoreBackup(db, v5Backup as Backup);
       await insertEntry(db, { day: localDay(), label: 'Trail oats', calories: 288, protein: 9.284, carbs: null, fat: 8.988 }, { foodId: null, amount: 100, unit: 'g' });
     },
   },
@@ -983,5 +984,140 @@ export const CopyEntriesToToday: Story = {
     await expect(canvas.getAllByRole('button', { name: /kilocalories, protein/ }).map(e => e.getAttribute('aria-label')?.split(',')[0]))
       .toEqual(['Coffee', 'Oats', 'Rice']);
     await expect(canvas.getByRole('button', { name: /^Oats, 100 g, 380 kilocalories, protein 10, carbs \?, fat 7 grams/ })).toBeVisible();
+  },
+};
+
+const daysAgo = (n: number) => addDays(localDay(), -n);
+
+async function openWeight(canvas: ReturnType<typeof within>) {
+  await userEvent.click(await canvas.findByRole('button', { name: 'Weight history' }));
+  await expect(await canvas.findByRole('heading', { name: 'Weight Trend' })).toBeVisible();
+}
+
+async function logWeight(canvas: ReturnType<typeof within>, text: string) {
+  await userEvent.click(canvas.getByRole('button', { name: 'Log weigh-in' }));
+  await userEvent.type(await canvas.findByLabelText(/^Weight in /), text);
+}
+
+export const WeightEmpty: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await openWeight(canvas);
+    await expect(canvas.getByText('No weigh-ins yet')).toBeVisible();
+    await expect(canvas.queryByText('7-day average')).toBeNull();
+    await expect(canvas.queryByRole('img')).toBeNull();
+    await expect(canvas.getByText(/is descriptive smoothing/)).toBeVisible();
+    await logWeight(canvas, '0');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save weigh-in' }));
+    await expect(await canvas.findByText('Enter a number above 0')).toBeVisible();
+    await replace(canvas.getByLabelText('Weight in kilograms'), '70');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save weigh-in' }));
+    // One weigh-in is one sample, not a confident trend.
+    await expect(await canvas.findByText(/^1 weigh-in · /)).toBeVisible();
+    await expect(canvas.getByText('avg 70 kg · 1 weigh-in')).toBeVisible();
+  },
+};
+
+export const WeightTrendAddEditDelete: Story = {
+  args: {
+    onInit: async (db) => {
+      await insertWeight(db, { day: daysAgo(7), kg: 80 });
+      await insertWeight(db, { day: daysAgo(1), kg: 82 });
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await openWeight(canvas);
+    // Day 1 and day 7 of a window: 80 and 82 kg average 81 kg.
+    await expect(canvas.getByText('avg 81 kg · 2 weigh-ins')).toBeVisible();
+    await logWeight(canvas, '84');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save weigh-in' }));
+    // Day 8: day 1 leaves the window, so 82 and 84 kg average 83 kg.
+    await expect(await canvas.findByText(/^2 weigh-ins · /)).toBeVisible();
+    await expect(canvas.getByText('avg 83 kg · 2 weigh-ins')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /, 84 kg, 7-day average 83 kg/ }));
+    await expect(await canvas.findByLabelText('Weight in kilograms')).toHaveValue('84');
+    await replace(canvas.getByLabelText('Weight in kilograms'), '86');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save weigh-in' }));
+    await expect(await canvas.findByText('avg 84 kg · 2 weigh-ins')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /, 86 kg, 7-day average 84 kg/ }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Delete weigh-in' }));
+    await expect(await canvas.findByText('avg 81 kg · 2 weigh-ins')).toBeVisible();
+    await expect(canvas.queryByText(/86 kg/)).toBeNull();
+  },
+};
+
+export const WeightReplaceAndPounds: Story = {
+  args: { onInit: (db) => insertWeight(db, { day: localDay(), kg: 80 }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await openWeight(canvas);
+    await userEvent.click(canvas.getByRole('radio', { name: 'Pounds' }));
+    await expect(await canvas.findByText('avg 176.4 lb · 1 weigh-in')).toBeVisible();
+    // A second weigh-in on the same day says it replaces the first before anything is saved.
+    await logWeight(canvas, '100');
+    await expect(canvas.getByText(/already has a weigh-in of 176.4 lb\. Saving replaces it\./)).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Replace weigh-in' }));
+    await expect(await canvas.findByText('avg 100 lb · 1 weigh-in')).toBeVisible();
+    await userEvent.click(canvas.getByRole('radio', { name: 'Kilograms' }));
+    await expect(await canvas.findByText('avg 45.4 kg · 1 weigh-in')).toBeVisible();
+    // An earlier day is a new weigh-in, not a replacement.
+    await logWeight(canvas, '46');
+    await userEvent.click(canvas.getByRole('button', { name: 'Previous day' }));
+    await expect(canvas.queryByText(/Saving replaces it/)).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Save weigh-in' }));
+    await expect(await canvas.findByText('avg 45.7 kg · 2 weigh-ins')).toBeVisible();
+    // Switching units in the form converts the shown weight; saving it untouched keeps the exact kg.
+    await userEvent.click(canvas.getByRole('button', { name: /, 45.4 kg, 7-day average/ }));
+    await expect(await canvas.findByLabelText('Weight in kilograms')).toHaveValue('45.4');
+    await userEvent.click(canvas.getByRole('radio', { name: 'Pounds' }));
+    await expect(await canvas.findByLabelText('Weight in pounds')).toHaveValue('100');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save weigh-in' }));
+    await expect(await canvas.findByRole('button', { name: /, 100 lb, 7-day average/ })).toBeVisible();
+  },
+};
+
+export const WeightLongHistoryLargeText: Story = {
+  args: {
+    onInit: async (db) => {
+      await saveWeightUnit(db, 'lb');
+      // 90 days, skipping every third, with a ten-day gap that leaves the chart and trend empty.
+      for (let n = 89; n >= 0; n--) {
+        if (n % 3 === 0 || (n > 40 && n < 51)) continue;
+        await insertWeight(db, { day: daysAgo(n), kg: 84 - n * 0.03 + (n % 4) * 0.2 });
+      }
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await openWeight(canvas);
+    await expect(await canvas.findByRole('img', { name: /^Chart of 20 weigh-ins from / })).toBeVisible();
+    enlargeText(canvasElement);
+    await waitFor(() => {
+      for (const el of canvas.getAllByText(/^avg \d/)) expect(el.scrollWidth, el.textContent!).toBeLessThanOrEqual(el.clientWidth);
+    });
+    const rows = canvas.getAllByRole('button', { name: /, 7-day average / });
+    await expect(rows).toHaveLength(53);
+    const last = rows.at(-1)!;
+    last.scrollIntoView({ block: 'end' });
+    const footer = canvas.getByRole('button', { name: 'Log weigh-in' });
+    await waitFor(() => expect(last.getBoundingClientRect().bottom).toBeLessThanOrEqual(footer.getBoundingClientRect().top));
+  },
+};
+
+export const WeightUnitSaveFails: Story = {
+  args: {
+    onInit: async (db) => {
+      await insertWeight(db, { day: localDay(), kg: 80 });
+      await db.execAsync("CREATE TRIGGER fail_unit BEFORE INSERT ON preferences BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END;");
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await openWeight(canvas);
+    await userEvent.click(canvas.getByRole('radio', { name: 'Pounds' }));
+    await expect(await canvas.findByRole('alert')).toHaveTextContent('Could not change the unit. Try again.');
+    await expect(canvas.getByRole('radio', { name: 'Kilograms' })).toHaveAttribute('aria-checked', 'true');
+    await expect(canvas.getByText('avg 80 kg · 1 weigh-in')).toBeVisible();
   },
 };

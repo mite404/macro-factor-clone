@@ -8,6 +8,7 @@ import { insertEntry, listEntries } from '../diary/diary.ts';
 import { archiveFood, insertFood, searchFoods } from '../foods/foods.ts';
 import { loadTargets, saveTargets } from '../goals/goals.ts';
 import { insertRecipe, listRecipes } from '../recipes/recipes.ts';
+import { insertWeight, listWeights, loadWeightUnit, saveWeightUnit } from '../weight/weight.ts';
 import { exportBackup, MAX_BACKUP_BYTES, parseBackup, restoreBackup, summarize, type Backup } from './backup.ts';
 
 // The first shipped format. Later versions must keep restoring this file unchanged.
@@ -19,8 +20,12 @@ const v3Text = readFileSync(new URL('./backup-v3.json', import.meta.url), 'utf8'
 const v3 = JSON.parse(v3Text);
 const v4Text = readFileSync(new URL('./backup-v4.json', import.meta.url), 'utf8');
 const v4 = JSON.parse(v4Text);
+const v5Text = readFileSync(new URL('./backup-v5.json', import.meta.url), 'utf8');
+const v5 = JSON.parse(v5Text);
 // Versions 1-3 predate recipes, so they restore with none.
 const noRecipes = { recipes: [], recipeIngredients: [] };
+// Versions 1-4 predate weights, so they restore with none, shown in kg.
+const noWeights = { weights: [], weightUnit: 'kg' };
 // Versions 1 and 2 predate brand, so their foods restore without one.
 const unbranded = (backup: { foods: object[] }) => backup.foods.map((f) => ({ ...f, brand: null }));
 
@@ -48,12 +53,14 @@ async function seeded() {
   const foodId = await insertFood(db, { name: 'Rice', basis: 'g', calories: 130, protein: 2.7, carbs: 28, fat: 0.3, serving: null, barcode: null });
   await insertEntry(db, { day: '2026-11-02', label: 'Rice', calories: 260, protein: 5.4, carbs: 56, fat: 0.6 }, { foodId, amount: 200, unit: 'g' });
   await saveTargets(db, { calories: 1800, fat: 60 });
+  await insertWeight(db, { day: '2026-11-02', kg: 90 });
+  await saveWeightUnit(db, 'lb');
   return { db, close, before: await exportBackup(db) };
 }
 
 // node:sqlite rows have a null prototype; compare them as the plain JSON a file holds.
-const records = ({ foods, diaryEntries, targets, recipes, recipeIngredients }: Backup) =>
-  JSON.parse(JSON.stringify({ foods, diaryEntries, targets, recipes, recipeIngredients }));
+const records = ({ foods, diaryEntries, targets, recipes, recipeIngredients, weights, weightUnit }: Backup) =>
+  JSON.parse(JSON.stringify({ foods, diaryEntries, targets, recipes, recipeIngredients, weights, weightUnit }));
 
 test('a backup of two days and saved foods restores every record into an empty database', async () => {
   const source = await emptyDb();
@@ -65,6 +72,8 @@ test('a backup of two days and saved foods restores every record into an empty d
   await insertEntry(source.db, { day: '2026-10-31', label: 'Juice', calories: 148.5, protein: null, carbs: 34.32, fat: null }, { foodId: juice, amount: 330, unit: 'ml' });
   await archiveFood(source.db, juice);
   await saveTargets(source.db, { calories: 2000, protein: 100, fat: 62.5 });
+  await insertWeight(source.db, { day: '2026-10-31', kg: 45.359237 });
+  await saveWeightUnit(source.db, 'lb');
   await insertRecipe(source.db, { name: 'Porridge', finishedGrams: 250, ingredients: [
     { foodId: oats, name: 'Oats', grams: 80, serving: { name: 'cup', count: 2 }, calories: 379, protein: 13.2, carbs: null, fat: 0 },
   ] });
@@ -79,6 +88,8 @@ test('a backup of two days and saved foods restores every record into an empty d
   }
   assert.deepEqual(await searchFoods(target.db, ''), await searchFoods(source.db, ''));
   assert.deepEqual(await listRecipes(target.db), await listRecipes(source.db));
+  assert.deepEqual(await listWeights(target.db), await listWeights(source.db));
+  assert.equal(await loadWeightUnit(target.db), 'lb');
   assert.equal(backup.recipeIngredients.length, 1);
   assert.deepEqual({ ...(await loadTargets(target.db)) }, { calories: 2000, protein: 100, fat: 62.5 });
   assert.equal(backup.foods.find((f) => f.id === juice)?.archived, true);
@@ -91,10 +102,10 @@ test('the first backup format restores with nulls, zeros, units, ids, and archiv
   await restoreBackup(db, parsed(v1Text));
 
   // Version 1 predates targets, so restoring it leaves no targets rather than keeping the old ones.
-  assert.deepEqual(records(await exportBackup(db)), { ...records(v1), foods: unbranded(v1), targets: [], ...noRecipes });
+  assert.deepEqual(records(await exportBackup(db)), { ...records(v1), foods: unbranded(v1), targets: [], ...noRecipes, ...noWeights });
   assert.deepEqual(await loadTargets(db), {});
   assert.deepEqual(await listEntries(db, '2026-11-02'), []);
-  assert.deepEqual(summarize(parsed(v1Text)), { foods: 2, archivedFoods: 1, entries: 3, days: 2, firstDay: '2026-10-30', lastDay: '2026-10-31', targets: 0, recipes: 0 });
+  assert.deepEqual(summarize(parsed(v1Text)), { foods: 2, archivedFoods: 1, entries: 3, days: 2, firstDay: '2026-10-30', lastDay: '2026-10-31', targets: 0, recipes: 0, weights: 0 });
   close();
 });
 
@@ -102,7 +113,7 @@ test('the version 2 format restores its targets with the same records', async ()
   const { db, close } = await seeded();
   await restoreBackup(db, parsed(v2Text));
 
-  assert.deepEqual(records(await exportBackup(db)), { ...records(v2), foods: unbranded(v2), ...noRecipes });
+  assert.deepEqual(records(await exportBackup(db)), { ...records(v2), foods: unbranded(v2), ...noRecipes, ...noWeights });
   assert.deepEqual({ ...(await loadTargets(db)) }, { calories: 2000, protein: 100 });
   assert.equal(summarize(parsed(v2Text)).targets, 2);
   close();
@@ -112,7 +123,7 @@ test('the version 3 format restores an imported food with its brand, barcode, an
   const { db, close } = await seeded();
   await restoreBackup(db, parsed(v3Text));
 
-  assert.deepEqual(records(await exportBackup(db)), { ...records(v3), ...noRecipes });
+  assert.deepEqual(records(await exportBackup(db)), { ...records(v3), ...noRecipes, ...noWeights });
   const [imported] = await searchFoods(db, 'berry');
   assert.deepEqual([imported.brand, imported.barcode, { ...imported.source }],
     ["KAR'S", '077034085228', { id: 'fdc:2105222', name: 'USDA FoodData Central', retrievedOn: '2026-11-04' }]);
@@ -123,7 +134,7 @@ test('the version 4 format restores recipe snapshots, units, yield, and the port
   const { db, close } = await seeded();
   await restoreBackup(db, parsed(v4Text));
 
-  assert.deepEqual(records(await exportBackup(db)), records(v4));
+  assert.deepEqual(records(await exportBackup(db)), { ...records(v4), ...noWeights });
   const [recipe] = await listRecipes(db);
   assert.deepEqual(JSON.parse(JSON.stringify(recipe)), {
     id: 3, name: 'Trail oats', finishedGrams: 200,
@@ -140,6 +151,21 @@ test('the version 4 format restores recipe snapshots, units, yield, and the port
   close();
 });
 
+test('the version 5 format restores weigh-ins in kg, unrounded, and the unit they are shown in', async () => {
+  const { db, close } = await seeded();
+  await restoreBackup(db, parsed(v5Text));
+
+  assert.deepEqual(records(await exportBackup(db)), records(v5));
+  assert.deepEqual(JSON.parse(JSON.stringify(await listWeights(db))), v5.weights);
+  assert.equal(await loadWeightUnit(db), 'lb');
+  assert.equal(summarize(parsed(v5Text)).weights, 3);
+  // An earlier file replaces the weigh-ins with none and the unit with the kg default.
+  await restoreBackup(db, parsed(v4Text));
+  assert.deepEqual(await listWeights(db), []);
+  assert.equal(await loadWeightUnit(db), 'kg');
+  close();
+});
+
 test('rejects unreadable, future, and inconsistent backups with a reason', () => {
   const withFood = (patch: object) => ({ ...v1, foods: [{ ...v1.foods[0], ...patch }, v1.foods[1]] });
   const withSource = (patch: object) => ({ ...v3, foods: v3.foods.map((f: { id: number }) => (f.id === 4 ? { ...f, ...patch } : f)) });
@@ -147,7 +173,15 @@ test('rejects unreadable, future, and inconsistent backups with a reason', () =>
   const cases: [string, unknown, RegExp][] = [
     ['malformed JSON', v1Text.slice(0, -10), /not valid JSON/],
     ['another app', { ...v1, format: 'other' }, /not a Nutrition diary backup/],
-    ['future version', { ...v4, version: 5 }, /newer version of the app \(format 5\)/],
+    ['future version', { ...v5, version: 6 }, /newer version of the app \(format 6\)/],
+    ['weights in version 4', { ...v4, weights: [] }, /unexpected field "weights"/],
+    ['version 5 without weights', { ...v5, weights: undefined }, /weights is missing/],
+    ['unknown weight unit', { ...v5, weightUnit: 'stone' }, /weight unit/],
+    ['version 5 without a weight unit', { ...v5, weightUnit: undefined }, /weight unit/],
+    ['two weigh-ins on one day', { ...v5, weights: [v5.weights[0], { ...v5.weights[0], kg: 81 }] }, /Weigh-in 2026-11-01 appears more than once/],
+    ['zero weight', { ...v5, weights: [{ ...v5.weights[0], kg: 0 }] }, /Weigh-in 2026-11-01 has an invalid value for kg/],
+    ['weigh-in timestamp', { ...v5, weights: [{ ...v5.weights[0], day: '2026-11-01T08:00:00Z' }] }, /Weigh-in #1 has an invalid value for day/],
+    ['weight in pounds', { ...v5, weights: [{ ...v5.weights[0], lb: 176 }] }, /Weigh-in 2026-11-01 has an unexpected field "lb"/],
     ['recipes in version 3', { ...v3, recipes: [] }, /unexpected field "recipes"/],
     ['version 4 without ingredients', { ...v4, recipeIngredients: undefined }, /recipeIngredients is missing/],
     ['zero finished weight', { ...v4, recipes: [{ ...v4.recipes[0], finishedGrams: 0 }] }, /Recipe 3 has an invalid value for finishedGrams/],
@@ -208,7 +242,7 @@ test('a write that fails halfway through restore rolls back to the existing data
   assert.equal(inserts, 3);
   assert.deepEqual(await exportBackup(db, new Date(before.exportedAt)), before);
   await restoreBackup(db, parsed(v1Text));
-  assert.deepEqual(records(await exportBackup(db)), { ...records(v1), foods: unbranded(v1), targets: [], ...noRecipes });
+  assert.deepEqual(records(await exportBackup(db)), { ...records(v1), foods: unbranded(v1), targets: [], ...noRecipes, ...noWeights });
   close();
 });
 
