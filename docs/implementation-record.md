@@ -177,6 +177,17 @@ for example from Settings, re-reads camera permission. `BarcodeScanPromptOpen`,
 stories pass. Fable 5.1 xhigh oracle review started on `4924f9c` in [its thread][t07-review]; the
 re-read came after that head.
 
+[The Fable 5.1 oracle][t07-review] reviewed base `74bddb0` to heads `4924f9c` and `2567cb8`: no high
+or medium findings and six lows. Its effort level was not observable from inside the run. The owner
+chose to fix lows 1 and 4, note 2 and 3, and leave 5 and 6. The Settings re-read now swallows a
+rejected permission read, and the scan hint shows only once access is granted, not behind the open
+iOS prompt. Low 2: iOS reports Screen Time or device-management restriction as denied, so a
+restricted phone still sees Open Settings, which cannot help; this layer cannot tell the two apart.
+Low 3: the AppState re-read is exercised only through the Storybook stand-in on web. iOS normally
+terminates the app when camera access changes in Settings, so the iOS path is covered by the scanner
+remounting on relaunch. The re-read is unverified on a device. Left as is: a UPC-E scan fills the
+field with its expanded 12-digit UPC-A, and Allow camera is unreachable on iOS.
+
 ## Ticket 06 oracle corrections are required after shipping
 
 The coordinator confirmed with `gh pr view 8` and `git ls-remote origin refs/heads/main` that
