@@ -79,6 +79,34 @@ Version 1 and 2 files have no `brand` and restore with `brand: null`. A version 
 has one is rejected as an unexpected field. `src/features/backup/backup-v3.json` is the version 3
 fixture.
 
+## Version 4
+
+Version 4 adds `recipes` and `recipeIngredients`. They mirror the `recipes` and
+`recipe_ingredients` tables.
+
+```json
+"recipes": [{ "id": 3, "name": "Trail oats", "finishedGrams": 200 }],
+"recipeIngredients": [{ "id": 6, "recipeId": 3, "foodId": 1, "name": "Oats", "grams": 80,
+  "servings": 2, "servingName": "cup", "calories": 370, "protein": 13.2, "carbs": null, "fat": 0 }]
+```
+
+- `finishedGrams` is the weighed edible weight of the whole dish, above 0. A logged portion is the
+  ingredients' total nutrition times its grams, divided by `finishedGrams`. It corrects for water
+  lost or gained in cooking, not for nutrients lost, such as drained fat.
+- Each ingredient is a snapshot. `calories`, `protein`, `carbs`, and `fat` are the food's values
+  per 100 g when it was added, and `name` is its name then. Editing the food later changes neither.
+  `null` still means unknown, and makes that nutrient unknown for the whole recipe.
+- `grams` is the amount used, above 0. Recipes are weighed in grams only; per-100 ml foods cannot be
+  ingredients, since their density is unknown. `servings` and `servingName` record an amount
+  entered as servings, for display. Both are set or both are `null`.
+- `foodId` names the saved food the snapshot came from, and must be in the file's `foods`. Every
+  ingredient's `recipeId` must be in `recipes`, and every recipe has at least one ingredient.
+- Diary entries logged from a recipe are ordinary snapshots with `foodId: null`, `amount` in grams,
+  and `unit: "g"`. Editing or restoring a recipe never changes them.
+
+Version 1 to 3 files have no recipes and restore with none. A version 1 to 3 file with either field
+is rejected as an unexpected field. `src/features/backup/backup-v4.json` is the version 4 fixture.
+
 ## Restore rules
 
 Restore replaces all data. It does not merge. The app reads the whole file and validates it before
@@ -90,8 +118,8 @@ apply:
 - `version` is newer than this app understands, or is not a positive integer.
 - A field or collection is missing, a record has an unexpected field, or a value breaks the same
   rule as its SQLite `CHECK` constraint.
-- An id appears twice in one collection, or a diary entry refers to a food that is not in the
-  file.
+- An id appears twice in one collection, a diary entry or recipe ingredient refers to a food that
+  is not in the file, an ingredient refers to a missing recipe, or a recipe has no ingredients.
 
 The confirmation shows what the file holds and what will be deleted. Cancel changes nothing. Replace
 deletes every table and inserts every record inside one SQLite transaction. If any write fails, the

@@ -41,7 +41,7 @@ export function daySummary(entries: Nutrition[]): string {
   return `${round(t.calories)} kcal   ${macro(t.protein)} P   ${macro(t.fat)} F   ${macro(t.carbs)} C`;
 }
 
-export type LoggerTab = 'Barcode' | 'Search' | 'Quick Add';
+export type LoggerTab = 'Barcode' | 'Search' | 'Recipes' | 'Quick Add';
 
 /** The logger's sheet header: close, the day's totals, and the ribbon of ways to log. */
 export function LoggerHeader({ active, summary, onClose, onTab }: {
@@ -59,7 +59,7 @@ export function LoggerHeader({ active, summary, onClose, onTab }: {
     <View style={{ width: 40, height: 4, borderRadius: 4, backgroundColor: p.border, alignSelf: 'center', margin: 4 }} />
     {active ? <View accessibilityRole="tablist" style={{ flexDirection: 'row', justifyContent: 'space-around',
       paddingHorizontal: 12, borderBottomWidth: 2, borderColor: p.border }}>
-      {(['Barcode', 'Search', 'Quick Add'] as const).map(name => <Pressable key={name} role="tab" aria-selected={name === active}
+      {(['Barcode', 'Search', 'Recipes', 'Quick Add'] as const).map(name => <Pressable key={name} role="tab" aria-selected={name === active}
         onPress={() => name !== active && onTab?.(name)} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12,
           borderBottomWidth: 2, borderColor: name === active ? p.text : 'transparent' }}>
         <Label size={12}>{name}</Label>
@@ -265,7 +265,7 @@ function QuickAddBody({ form, errors, saveError, correcting, portion, onField }:
     ? round(protein * 4 + carbs * 4 + fat * 9) : null;
   return <View style={{ padding: 18, gap: 12 }}>
       {correcting ? <Label accessibilityRole="header" weight="600">Edit entry</Label> : null}
-      {portion ? <Label muted size={12}>Logged as {portionText(portion)} of a saved food. Changes here affect only this entry, not the food.</Label> : null}
+      {portion ? <Label muted size={12}>Logged as {portionText(portion)} of {portion.foodId === null ? 'a recipe' : 'a saved food'}. Changes here affect only this entry, not the {portion.foodId === null ? 'recipe' : 'food'}.</Label> : null}
       <Field label="Energy" a11y="Calories in kilocalories" value={form.calories} onChangeText={t => onField('calories', t)}
         suffix="kcal" placeholder="Required" keyboardType="decimal-pad" error={errors.calories} autoFocus={!correcting} />
       {macroSum !== null ? <Label muted size={12}>Macro sum is {macroSum} kcal</Label> : null}

@@ -1,0 +1,165 @@
+{
+  "format": "nutrition-diary-backup",
+  "version": 4,
+  "exportedAt": "2026-11-05T18:00:00.000Z",
+  "foods": [
+    {
+      "id": 1,
+      "name": "Oats",
+      "basis": "g",
+      "calories": 379,
+      "protein": 13.2,
+      "carbs": null,
+      "fat": 0,
+      "servingName": "cup",
+      "servingAmount": 40,
+      "barcode": "0070",
+      "brand": null,
+      "sourceId": null,
+      "sourceName": null,
+      "retrievedOn": null,
+      "archived": false
+    },
+    {
+      "id": 4,
+      "name": "Orange juice",
+      "basis": "ml",
+      "calories": 45,
+      "protein": null,
+      "carbs": 10.4,
+      "fat": null,
+      "servingName": null,
+      "servingAmount": null,
+      "barcode": null,
+      "brand": null,
+      "sourceId": "fdc:2345",
+      "sourceName": "USDA FoodData Central",
+      "retrievedOn": "2026-10-20",
+      "archived": true
+    },
+    {
+      "id": 5,
+      "name": "NUT 'N BERRY MIX",
+      "basis": "g",
+      "calories": 500,
+      "protein": 14.3,
+      "carbs": 42.9,
+      "fat": 32.1,
+      "servingName": "1 ONZ",
+      "servingAmount": 28,
+      "barcode": "077034085228",
+      "brand": "KAR'S",
+      "sourceId": "fdc:2105222",
+      "sourceName": "USDA FoodData Central",
+      "retrievedOn": "2026-11-04",
+      "archived": false
+    }
+  ],
+  "diaryEntries": [
+    {
+      "id": 2,
+      "day": "2026-10-30",
+      "label": "Quick add",
+      "calories": 250,
+      "protein": 0,
+      "carbs": null,
+      "fat": null,
+      "foodId": null,
+      "amount": null,
+      "unit": null
+    },
+    {
+      "id": 7,
+      "day": "2026-10-31",
+      "label": "Oats",
+      "calories": 568.5,
+      "protein": 19.8,
+      "carbs": null,
+      "fat": 0,
+      "foodId": 1,
+      "amount": 150,
+      "unit": "g"
+    },
+    {
+      "id": 9,
+      "day": "2026-10-31",
+      "label": "Orange juice",
+      "calories": 148.5,
+      "protein": null,
+      "carbs": 34.32,
+      "fat": null,
+      "foodId": 4,
+      "amount": 330,
+      "unit": "ml"
+    },
+    {
+      "id": 10,
+      "day": "2026-11-04",
+      "label": "NUT 'N BERRY MIX",
+      "calories": 140,
+      "protein": 4.004,
+      "carbs": 12.012,
+      "fat": 8.988,
+      "foodId": 5,
+      "amount": 28,
+      "unit": "g"
+    },
+    {
+      "id": 11,
+      "day": "2026-11-05",
+      "label": "Trail oats",
+      "calories": 288,
+      "protein": 9.284,
+      "carbs": null,
+      "fat": 8.988,
+      "foodId": null,
+      "amount": 100,
+      "unit": "g"
+    }
+  ],
+  "targets": [
+    {
+      "nutrient": "calories",
+      "amount": 2000
+    },
+    {
+      "nutrient": "protein",
+      "amount": 100
+    }
+  ],
+  "recipes": [
+    {
+      "id": 3,
+      "name": "Trail oats",
+      "finishedGrams": 200
+    }
+  ],
+  "recipeIngredients": [
+    {
+      "id": 6,
+      "recipeId": 3,
+      "foodId": 1,
+      "name": "Oats",
+      "grams": 80,
+      "servings": 2,
+      "servingName": "cup",
+      "calories": 370,
+      "protein": 13.2,
+      "carbs": null,
+      "fat": 0
+    },
+    {
+      "id": 8,
+      "recipeId": 3,
+      "foodId": 5,
+      "name": "NUT 'N BERRY MIX",
+      "grams": 56,
+      "servings": null,
+      "servingName": null,
+      "calories": 500,
+      "protein": 14.3,
+      "carbs": 42.9,
+      "fat": 32.1
+    }
+  ]
+}

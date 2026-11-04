@@ -23,6 +23,7 @@ import {
 } from '../../../../src/features/foods/foods.ts';
 import { loadTargets, parseTargets, saveTargets, type Targets } from '../../../../src/features/goals/goals.ts';
 import { lookupBarcode, parseUsdaSearch, type Lookup } from '../../../../src/features/lookup/lookup.ts';
+import { ingredientOf, insertRecipe, listRecipes, logRecipe, parseRecipeForm } from '../../../../src/features/recipes/recipes.ts';
 import { migrate, migrations, type Db } from '../../../../src/storage/migrations.ts';
 import { openTestDb } from '../../../../src/storage/testDb.ts';
 
@@ -31,7 +32,9 @@ type Template = { form: FoodForm; per100: Nut; serving: { name: string; amount: 
 // A saved food's brand and source are set when it is saved and no edit changes them.
 type Slot = { id: number; t: Template; archived: boolean; provenance: Provenance } | null;
 type ExpectedEntry = Omit<Entry, 'id'>;
-type State = { slots: [Slot, Slot]; entries: ExpectedEntry[]; targets: Targets; saves: number; rejected: boolean };
+// The one recipe: food 0's per-100 g values and name when it was made, whatever food 0 became since.
+type RecipeSnapshot = { foodId: number; name: string; per100: Nut } | null;
+type State = { slots: [Slot, Slot]; entries: ExpectedEntry[]; targets: Targets; recipe: RecipeSnapshot; saves: number; rejected: boolean };
 type Op = { name: string; words: string; slot: 0 | 1; next: (s: State) => State | null };
 type Failure = { property: string; detail: string };
 class PropertyFailure extends Error {
@@ -209,6 +212,18 @@ const ops: Op[] = [
   { name: 'setTargets', slot: 0, words: 'set targets: 2000 kcal and 100 g protein, carbs and fat blank', next: (s) => ({ ...s, targets: { calories: 2000, protein: 100 }, rejected: false }) },
   { name: 'editTargets', slot: 0, words: 'edit targets: calories blank, protein 120, fat 62,5', next: (s) => ({ ...s, targets: { protein: 120, fat: 62.5 }, rejected: false }) },
   {
+    name: 'recipe0', slot: 0, words: 'make recipe Stew from 200 g of food 0, finished weight 150 g',
+    next: (s) => (live(s, 0) && s.slots[0]!.t.form.basis === 'g' && !s.recipe
+      ? { ...s, recipe: { foodId: s.slots[0]!.id, name: s.slots[0]!.t.form.name, per100: s.slots[0]!.t.per100 }, rejected: false } : null),
+  },
+  {
+    // 200 g of food spread over 150 g finished, then 75 g logged: exactly the food's per-100 g values.
+    name: 'logRecipe', slot: 0, words: 'log 75 g of recipe Stew',
+    next: (s) => (s.recipe
+      ? { ...s, entries: [...s.entries, { day: DAY, label: 'Stew', ...s.recipe.per100, portion: { foodId: null, amount: 75, unit: 'g' } }], rejected: false }
+      : null),
+  },
+  {
     name: 'failedRestores', slot: 0,
     words: 'try to restore a backup whose entry refers to a missing food, then a valid backup whose middle write fails',
     next: (s) => ({ ...s, rejected: false }),
@@ -267,6 +282,17 @@ async function compareArchived(db: Db, s: State): Promise<Failure | null> {
   return { property: 'F3 archived-food-kept', detail: `expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(actual)}` };
 }
 
+// R1: the recipe keeps the ingredient values it was made with through food edits, archiving,
+// reopen, and restore.
+async function compareRecipes(db: Db, s: State): Promise<Failure | null> {
+  const expected = s.recipe ? [{ name: 'Stew', finishedGrams: 150, ingredients: [
+    { foodId: s.recipe.foodId, name: s.recipe.name, grams: 200, serving: null, ...s.recipe.per100 },
+  ] }] : [];
+  const actual = JSON.parse(JSON.stringify((await listRecipes(db)).map(({ id: _, ...r }) => r)));
+  if (isDeepStrictEqual(expected, actual)) return null;
+  return { property: 'R1 recipe-snapshot', detail: `expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(actual)}` };
+}
+
 async function compareTargets(db: Db, s: State): Promise<Failure | null> {
   const actual = { ...(await loadTargets(db)) };
   if (isDeepStrictEqual(s.targets, actual)) return null;
@@ -278,7 +304,9 @@ async function dump(db: Db): Promise<string> {
   const foods = await db.getAllAsync('SELECT * FROM foods ORDER BY id', []);
   const entries = await db.getAllAsync('SELECT * FROM diary_entries ORDER BY id', []);
   const targets = await db.getAllAsync('SELECT * FROM targets ORDER BY nutrient', []);
-  return JSON.stringify({ foods, entries, targets });
+  const recipes = await db.getAllAsync('SELECT * FROM recipes ORDER BY id', []);
+  const ingredients = await db.getAllAsync('SELECT * FROM recipe_ingredients ORDER BY id', []);
+  return JSON.stringify({ foods, entries, targets, recipes, ingredients });
 }
 
 // Both restores must fail and leave every row as it was: the bad file before any write, the good
@@ -393,6 +421,18 @@ async function apply(db: Db, op: Op, before: State, after: State): Promise<boole
     await updateFood(db, slot!.id, await parsedFood(after.slots[op.slot]!.t));
   } else if (op.name.startsWith('archive')) {
     await archiveFood(db, slot!.id);
+  } else if (op.name === 'recipe0') {
+    const food = (await searchFoods(db, '')).find((f) => f.id === slot!.id)!;
+    const ingredient = ingredientOf(food, 200, 'g');
+    if ('error' in ingredient) throw new Error(`ingredient rejected: ${ingredient.error}`);
+    const parsed = parseRecipeForm({ name: ' Stew ', finishedGrams: '150' }, [ingredient.ingredient]);
+    if ('errors' in parsed) throw new Error(`valid recipe rejected: ${JSON.stringify(parsed.errors)}`);
+    await insertRecipe(db, parsed.recipe);
+  } else if (op.name === 'logRecipe') {
+    const [recipe] = await listRecipes(db);
+    const result = logRecipe(recipe, 75);
+    if ('error' in result) throw new Error(`recipe portion rejected: ${result.error}`);
+    await insertEntry(db, { day: DAY, label: recipe.name, ...result.nutrition }, result.portion);
   } else if (op.name.startsWith('log')) {
     const food = (await searchFoods(db, '')).find((f) => f.id === slot!.id);
     if (!food) return true;
@@ -417,7 +457,7 @@ async function run(legacy: boolean, seq: Op[]): Promise<{ failure: Failure; step
   const dir = mkdtempSync(join(SCRATCH, 'nutrition-check-'));
   let path = join(dir, 'nutrition.db');
   let { db, close } = openTestDb(path);
-  let s: State = { slots: [null, null], entries: legacy ? [LEGACY] : [], targets: {}, saves: 0, rejected: false };
+  let s: State = { slots: [null, null], entries: legacy ? [LEGACY] : [], targets: {}, recipe: null, saves: 0, rejected: false };
   let step = 0;
   try {
     if (legacy) {
@@ -448,7 +488,7 @@ async function run(legacy: boolean, seq: Op[]): Promise<{ failure: Failure; step
         rejected !== s.rejected
           ? { property: 'H4 unit-rejection', detail: `logPortion ${rejected ? 'rejected' : 'accepted'}; the spec says ${s.rejected ? 'reject' : 'accept'}` }
           : (compareEntries(s.entries, await listEntries(db, DAY)) ?? compareFoods(s, await searchFoods(db, '')) ??
-            (await compareArchived(db, s)) ?? (await compareTargets(db, s)));
+            (await compareArchived(db, s)) ?? (await compareTargets(db, s)) ?? (await compareRecipes(db, s)));
       if (failure) return { failure, steps: step + 1 };
     }
     return null;
@@ -470,7 +510,7 @@ async function main() {
   // Iterative deepening, so the first counterexample is a shortest one.
   for (let depth = 1; depth <= DEPTH; depth++) {
     for (const legacy of [false, true]) {
-      const start: State = { slots: [null, null], entries: legacy ? [LEGACY] : [], targets: {}, saves: 0, rejected: false };
+      const start: State = { slots: [null, null], entries: legacy ? [LEGACY] : [], targets: {}, recipe: null, saves: 0, rejected: false };
       for (const seq of sequences(start, depth)) {
         runs++;
         const result = await run(legacy, seq);
@@ -483,7 +523,7 @@ async function main() {
       }
     }
   }
-  console.log(`PASS H1 H2 H3 H4 F1 F2 F3 T1 L1 B1 X0: ${runs} sequences of 1-${DEPTH} ops from ${ops.length}, 2 start states`);
+  console.log(`PASS H1 H2 H3 H4 F1 F2 F3 T1 L1 R1 B1 X0: ${runs} sequences of 1-${DEPTH} ops from ${ops.length}, 2 start states`);
   console.log(`node ${process.version}, SQLite ${v}, ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 

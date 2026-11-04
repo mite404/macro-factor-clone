@@ -6,6 +6,8 @@ The MacroFactor reference screens are the app's UI. Their component kit moved fr
 disabled buttons became callbacks. `src/features/goals/TargetsForm.tsx` follows `CreateFood`'s
 layout. `src/features/lookup/BarcodeScreens.tsx` adds the logger's Barcode tab, in the place of the
 reference's Scan tab, and a USDA or Open Food Facts record review that follows `FoodDetail`.
+`src/features/recipes/RecipeScreens.tsx` adds the logger's Recipes tab and recipe detail on the dark
+sheet, and a builder and ingredient picker that follow the light `RecipeBuilder` reference.
 `src/features/diary/Diary.tsx` wires them to SQLite. The
 `App` stories render that production app.
 
@@ -31,7 +33,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 41 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 44 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -72,6 +74,9 @@ adds dependencies and needs the owner's approval.
 | `BarcodeScanDeniedTypeUnknown` | Denied camera offers Settings, re-reads access on return; a typed unknown code reaches Create food |
 | `BarcodeScanPromptOpen` | While the iOS prompt is open the scanner waits behind it, with no scan hint and no access-off message |
 | `BarcodeScanMountErrors` | A recovered media reset keeps the camera open; another mount error reports a failed start |
+| `RecipeBuildAndLog` | 0 g and empty recipes rejected, ml food refused, draft kept across picks, 150 g of 600 g = 225 kcal, fat unknown |
+| `RecipeEditKeepsHistory` | Removing an ingredient and reweighing changes the next portion, not the one already logged |
+| `RecipeManyIngredientsScrolls` | Ten ingredients keep the draft, and the last one scrolls clear of Save |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
 
 `main.ts` also aliases `expo-camera` to `camera.tsx`. Its permission answers follow iOS, and its

@@ -46,6 +46,28 @@ export const migrations = [
   );`,
   // The brand a provider reported for an imported food, kept apart from its name.
   `ALTER TABLE foods ADD COLUMN brand TEXT CHECK (brand <> '');`,
+  // Ingredients snapshot a saved food's nutrients per 100 g, so food edits never change a recipe.
+  // servings and serving_name record how an amount was entered; grams is what counts.
+  `CREATE TABLE recipes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL CHECK (name <> ''),
+    finished_grams REAL NOT NULL CHECK (finished_grams > 0)
+  );
+  CREATE TABLE recipe_ingredients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipe_id INTEGER NOT NULL REFERENCES recipes (id),
+    food_id INTEGER NOT NULL REFERENCES foods (id),
+    name TEXT NOT NULL CHECK (name <> ''),
+    grams REAL NOT NULL CHECK (grams > 0),
+    servings REAL CHECK (servings > 0),
+    serving_name TEXT CHECK (serving_name <> ''),
+    calories REAL NOT NULL CHECK (calories >= 0),
+    protein REAL CHECK (protein >= 0),
+    carbs REAL CHECK (carbs >= 0),
+    fat REAL CHECK (fat >= 0),
+    CHECK ((servings IS NULL) = (serving_name IS NULL))
+  );
+  CREATE INDEX recipe_ingredients_recipe ON recipe_ingredients (recipe_id);`,
 ];
 
 /**
