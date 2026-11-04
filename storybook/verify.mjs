@@ -32,6 +32,22 @@ try {
     console.log(`PASS ${id}`);
   }
   console.log(`${stories.length} stories rendered at 390 px; all play assertions passed`);
+
+  // The App preview is a 390 × 844 phone, centered, at any window size; narrower windows shrink it.
+  const screen = `(() => { const r = document.querySelector('[data-testid=reference-screen]').getBoundingClientRect();
+    return { page: document.documentElement.clientWidth, left: r.left, width: r.width, height: r.height }; })()`;
+  for (const id of ['app--empty-diary', 'app--targets-large-text']) {
+    browser('set', 'viewport', '1280', '900', '2');
+    browser('open', `${origin}/iframe.html?id=${id}&viewMode=story`);
+    browser('wait', '--fn', done);
+    for (const [width, height] of [[1280, 900], [320, 700], [1280, 900]]) {
+      browser('set', 'viewport', String(width), String(height), '2');
+      const { page, left, width: w, height: h } = JSON.parse(browser('eval', screen));
+      const expected = Math.min(390, page);
+      assert.deepEqual([w, h, left], [expected, 844, (page - expected) / 2], `${id} at ${width} × ${height}`);
+    }
+    console.log(`PASS ${id} sizes to 390 × 844 at 1280 and 320 px windows`);
+  }
 } finally {
   browser('close');
 }
