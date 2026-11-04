@@ -55,9 +55,9 @@ every run.
 - A type error in `.agents/skills/verifying-nutrition-history/scripts/check.ts` fails typecheck.
 - The invariant check passes at depth 4 and 5, and `mutants.ts` reports all 10 mutants `CAUGHT`.
 - `npm test`, `npm run export:ios`, and `expo start --web` succeed with TypeScript 7.
-- With TypeScript 7 installed, `npm run build-storybook` succeeds and all 6 stories pass against
+- With TypeScript 7 installed, `npm run build-storybook` succeeds and all 17 stories pass against
   the static build. Changing the portion scale divisor from 100 to 50 fails
-  `saved-food-create-and-log` with exit 1. Restoring it brings back 6 passing stories.
+  `saved-food-create-and-log` with exit 1. Restoring it brings back 17 passing stories.
 - The pull request shows each job as a separate check.
 
 ## Limits
