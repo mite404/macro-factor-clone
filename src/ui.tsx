@@ -129,25 +129,29 @@ export function Macros({ values, targets, fills, over, label }: {
   </View>;
 }
 
-/** Synthetic chart values for visual study only, with no health estimates or live data. */
-export function Sparkline({ values, color, height = 64, width = 145, dots = true }: {
-  values: readonly number[]; color: string; height?: number; width?: number; dots?: boolean;
+/**
+ * A line of 0-1 values spaced evenly across `width`. A null value is a gap: no dot, and no line
+ * joins its neighbours. Without `label` it is a reference study's illustrative chart.
+ */
+export function Sparkline({ values, color, height = 64, width = 145, dots = true, label }: {
+  values: readonly (number | null)[]; color: string; height?: number; width?: number; dots?: boolean; label?: string;
 }) {
   const p = usePalette();
-  const points = values.map((value, i) => ({
+  const points = values.map((value, i) => value === null ? null : ({
     x: 5 + i * (width - 10) / Math.max(1, values.length - 1), y: height - 5 - value * (height - 10),
   }));
-  return <View accessibilityRole="image" accessibilityLabel="Illustrative chart, not live health data"
+  return <View accessibilityRole="image" accessibilityLabel={label ?? 'Illustrative chart, not live health data'}
     style={{ width, height }}>
     {points.slice(1).map((point, i) => {
       const before = points[i];
+      if (!point || !before) return null;
       const length = Math.hypot(point.x - before.x, point.y - before.y);
       const angle = Math.atan2(point.y - before.y, point.x - before.x);
       return <View key={i} style={{ position: 'absolute',
         left: (before.x + point.x - length) / 2, top: (before.y + point.y) / 2,
         width: length, height: 1.5, backgroundColor: color, transform: [{ rotate: `${angle}rad` }] }} />;
     })}
-    {dots ? points.map((point, i) => <View key={i} style={{ position: 'absolute',
+    {dots ? points.map((point, i) => point && <View key={i} style={{ position: 'absolute',
       left: point.x - 3, top: point.y - 3, width: 6, height: 6, borderRadius: 3,
       borderWidth: 1.5, borderColor: color, backgroundColor: p.surface }} />) : null}
   </View>;

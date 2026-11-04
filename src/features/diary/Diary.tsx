@@ -11,6 +11,7 @@ import { loadUsdaKey } from '../lookup/key';
 import { lookupBarcode, lookupOff, type Lookup, type Miss, type ProviderFood } from '../lookup/lookup';
 import { loadTargets, parseTargets, saveTargets, type TargetErrors, type Targets } from '../goals/goals';
 import { TargetsForm } from '../goals/TargetsForm';
+import WeightHistory from '../weight/WeightHistory';
 import { IngredientPicker, RecipeBuilder, RecipeDetail, RecipeList } from '../recipes/RecipeScreens';
 import {
   ingredientOf, insertRecipe, listRecipes, logRecipe, parseRecipeForm, updateRecipe,
@@ -42,7 +43,8 @@ type View =
   | { kind: 'targets'; form: NutritionForm }
   | { kind: 'recipes' }
   | { kind: 'recipe'; recipe: Recipe; quantity: string }
-  | BuildView;
+  | BuildView
+  | { kind: 'weight' };
 
 const blankEntry: View = { kind: 'entry', id: null, form: { label: '', calories: '', protein: '', carbs: '', fat: '' }, portion: null };
 const toText = (n: number | null) => (n === null ? '' : String(n));
@@ -337,6 +339,8 @@ export default function Diary() {
       }} />;
   }
 
+  if (view.kind === 'weight') return <WeightHistory onClose={close} />;
+
   if (view.kind === 'settings') {
     // A restore may have replaced every entry, so the log reloads on the way back.
     const { back } = view;
@@ -349,5 +353,5 @@ export default function Diary() {
   return <FoodLog day={day} entries={entries} targets={targets} onDay={setDay} onEntry={e => go(entryView(e))}
     onSearch={() => go({ kind: 'search' })} onBarcode={() => go(blankBarcode)} onQuickAdd={() => go(blankEntry)}
     onSettings={() => go({ kind: 'settings', back: { kind: 'log' } })}
-    onTargets={() => go(targetsView(targets))} />;
+    onTargets={() => go(targetsView(targets))} onWeight={() => go({ kind: 'weight' })} />;
 }
