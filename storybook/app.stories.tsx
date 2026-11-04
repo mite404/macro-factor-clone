@@ -746,7 +746,7 @@ export const BarcodeScanDeniedTypeUnknown: Story = {
   },
 };
 
-// The iOS prompt is still open: the scanner waits behind it instead of reporting access off.
+// The iOS prompt is still open: the scanner waits behind it, neither inviting a scan nor reporting access off.
 export const BarcodeScanPromptOpen: Story = {
   args: { onInit: async () => { Object.assign(camera, { status: 'undetermined', answer: 'undetermined', requests: 0, scans: [], mountError: '' }); } },
   play: async ({ canvasElement }) => {
@@ -754,7 +754,8 @@ export const BarcodeScanPromptOpen: Story = {
     await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
     await userEvent.click(await canvas.findByRole('button', { name: 'Scan a barcode' }));
     await waitFor(() => expect(camera.requests).toBe(1));
-    await expect(canvas.getByText(/Hold the barcode inside the square/)).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    await expect(canvas.queryByText(/Hold the barcode inside the square/)).toBeNull();
     await expect(canvas.queryByText('Camera access is off')).toBeNull();
   },
 };

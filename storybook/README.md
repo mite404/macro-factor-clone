@@ -70,7 +70,7 @@ adds dependencies and needs the owner's approval.
 | `BarcodeOffLargeText` | No key: Open Food Facts directly; unknown protein and fat stay "?"; 1.5× text keeps figures whole |
 | `BarcodeScanOnceAndRescan` | One permission request; three repeated detections make one lookup; an explicit rescan makes one more |
 | `BarcodeScanDeniedTypeUnknown` | Denied camera offers Settings, re-reads access on return; a typed unknown code reaches Create food |
-| `BarcodeScanPromptOpen` | While the iOS prompt is open the scanner waits behind it, not reporting access off |
+| `BarcodeScanPromptOpen` | While the iOS prompt is open the scanner waits behind it, with no scan hint and no access-off message |
 | `BarcodeScanMountErrors` | A recovered media reset keeps the camera open; another mount error reports a failed start |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
 
