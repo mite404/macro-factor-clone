@@ -135,12 +135,66 @@ the results. There are no open prerequisite PRs and no prerequisite CI blocker.
 | 05 | USDA lookup | [PR #7][pr7], merged |
 | 06 | Open Food Facts fallback | [PR #8][pr8], merged by worker; oracle corrections pending |
 | 07 | Camera scanning | [PR #10][pr10], merged after Fable review and green CI; native acceptance pending |
-| 08 | Weighed recipes | Queued after 07 |
-| 09 | Copy diary entries | Queued after 08 |
-| 10 | Weight history | Queued after 09 |
+| 08 | Weighed recipes | PR #12, merged as `4f8f49f` |
+| 09 | Copy diary entries | [PR #14][pr14], merged as `a7459e0`; native acceptance pending |
+| 10 | Weight history | [PR #13][pr13], merged as `9d975c0`; native acceptance pending |
 
 Feature delivery is 4 of 8 merged, but ticket 06 has unresolved oracle findings and ticket 07 is
 held. Last confirmed remote main is [4d2c9ca][main06]. No Mac satellite has been started.
+
+The ticket 08 to 10 rows were updated on November 4 from `git log origin/main`. That paragraph is
+the earlier state. Remote main is `9d975c0`. A separate thread owns the Mac build.
+
+## Storybook App preview sizing follow-up
+
+Draft [PR #15][pr15] on `fix/storybook-app-phone-size`, from main at `9d975c0`. Implemented in
+[this thread][sizing-thread], requested as Claude Code Opus 5.5 at medium effort. The model ID
+`claude-opus-5-5` was observed. The effort was not observable and is not provider-attested.
+
+The owner saw that resizing Storybook reflowed the app and that TargetsLargeText looked taller
+than other previews. The App decorator used `height: 100vh` with no width limit, inside the
+fullscreen layout. Reproduced in this orb: at 1280 × 900 and 320 × 700 windows, EmptyDiary and
+TargetsLargeText both rendered the screen at the full window size. The decorator now gives a
+centered screen up to 390 CSS px wide and 844 px high that narrows below 390 px. Content scrolls
+inside it. Storybook only. The production app, `src/`, and live stories keep no device frame.
+
+`test:storybook` now opens both stories at 1280 × 900, then resizes to 320 × 700 and back. It
+requires a centered `min(390, page width)` × 844 screen. On the old wrapper it failed with
+`[1280, 900, 0]` against `[390, 844, 445]`. The 390 × 844 pass over all 50 stories is unchanged.
+
+Observed in this orb, at head `58e6106` before this record:
+
+- `npm run typecheck` and `npm run lint` passed.
+- `npm test` passed 49 of 49 tests.
+- `npm run export:ios` and `npm run build-storybook` passed.
+- `npm run test:storybook` passed 50 stories plus both size checks on the dev server. It passed the
+  same way with `STORYBOOK_URL` on the static build.
+- A scratch copy of `verify.mjs` at 1280 × 900 passed all 50 play functions. TargetsLargeText kept
+  whole totals, and Dessert scrolled above the footer.
+- The `verifying-nutrition-history` depth-4 check passed: 56,362 sequences in 146 s. No
+  persistence code changed, so mutants and depth 5 were not run.
+- Screenshots in the Storybook manager at 1280 × 900 show EmptyDiary, TargetsLargeText, and a
+  design reference. All three are 390 px wide and centered. A 320 px screenshot and a resize and
+  scroll recording were inspected. The list scrolls inside the screen while the footer stays put.
+  The recorder keeps a 1280 × 900 frame, so narrow widths look stretched in the video only.
+
+In Storybook's manager, the preview pane is shorter than 844 px, so the iframe scrolls. The
+references behave the same way. At 320 px with 1.5× text, "240 of 250 g" wraps its unit. The same
+wrap happened before this change, and it is production layout. Untested: native iOS. Oracle review
+is pending. The coordinator asked for no new thread, so this thread did not start the Fable
+reviewer. The PR stays draft until review.
+
+## Tickets 09 and 10 merge facts
+
+Observed from `git log origin/main`: ticket 09 merged as [PR #14][pr14] at
+`a7459e026ec01d20a85514a37cfa93e55134b1ab`. Ticket 10 merged as [PR #13][pr13] at
+`9d975c0eb56ae4b93c589309090461c3f3bb2082`. Native acceptance is pending for both.
+
+The following were reported by the coordinator and not independently checked here. For ticket 09,
+the Fable recheck approved `023b3c4`. The owner deferred Space toggling copy checkboxes on web. The
+ticket 10 thread reported Fable clean on the final merge-resolution head `c53622d`, which merged as
+`9d975c0`. It also reported 49 tests, 50 stories, six passing CI jobs, and a depth-4 nutrition
+PASS over 56,362 sequences.
 
 ## Ticket 09: copy diary entries
 
@@ -586,6 +640,10 @@ No merges are authorized by this record. No native build has been verified by th
 [pr7]: https://github.com/mite404/macro-factor-clone/pull/7
 [pr8]: https://github.com/mite404/macro-factor-clone/pull/8
 [pr10]: https://github.com/mite404/macro-factor-clone/pull/10
+[pr13]: https://github.com/mite404/macro-factor-clone/pull/13
+[pr14]: https://github.com/mite404/macro-factor-clone/pull/14
+[pr15]: https://github.com/mite404/macro-factor-clone/pull/15
+[sizing-thread]: https://ampcode.com/threads/T-6fcfccf8-1bea-4c68-bf06-7666fb1b1346
 [ci07]: https://github.com/mite404/macro-factor-clone/actions/runs/41789295767
 [main06]:
   https://github.com/mite404/macro-factor-clone/commit/4d2c9ca30594542a9161ee4668bbb1a262abd31f
