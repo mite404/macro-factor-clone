@@ -110,6 +110,7 @@ test('the version 3 format restores an imported food with its brand, barcode, an
 
 test('rejects unreadable, future, and inconsistent backups with a reason', () => {
   const withFood = (patch: object) => ({ ...v1, foods: [{ ...v1.foods[0], ...patch }, v1.foods[1]] });
+  const withSource = (patch: object) => ({ ...v3, foods: v3.foods.map((f: { id: number }) => (f.id === 4 ? { ...f, ...patch } : f)) });
   const withEntry = (patch: object) => ({ ...v1, diaryEntries: [...v1.diaryEntries.slice(0, 2), { ...v1.diaryEntries[2], ...patch }] });
   const cases: [string, unknown, RegExp][] = [
     ['malformed JSON', v1Text.slice(0, -10), /not valid JSON/],
@@ -135,6 +136,9 @@ test('rejects unreadable, future, and inconsistent backups with a reason', () =>
     ['unknown unit', withEntry({ unit: 'oz' }), /Diary entry 9 has an invalid value for unit/],
     ['amount without unit', withEntry({ unit: null }), /Diary entry 9 has an amount without a unit/],
     ['serving without amount', withFood({ servingAmount: null }), /Food 1 has a serving name without an amount/],
+    ['source without name', withSource({ sourceName: null }), /Food 4 has a source id, name, and date that are not all set/],
+    ['source without date', withSource({ retrievedOn: null }), /Food 4 has a source id, name, and date that are not all set/],
+    ['source with empty name', withSource({ sourceName: '' }), /Food 4 has an invalid value for sourceName/],
     ['impossible date', withEntry({ day: '2026-02-30' }), /Diary entry 9 has an invalid value for day/],
     ['non-digit barcode', withFood({ barcode: '12a' }), /Food 1 has an invalid value for barcode/],
     ['missing field', withFood({ archived: undefined }), /Food 1 has an invalid value for archived/],
