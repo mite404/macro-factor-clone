@@ -337,6 +337,24 @@ test('Open Food Facts reads are gated at 15 a minute, and a throttled reply paus
   close();
 });
 
+test('moving the device clock back never leaves the Open Food Facts gate shut', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 3_600_000 });
+  let status = 429;
+  const urls: string[] = [];
+  const request = async (input: string | URL | Request) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify(nutella), { status });
+  };
+  assert.deepEqual(await lookupOff('3017620422003', request), { kind: 'rate-limited' });
+  status = 200;
+  t.mock.timers.tick(60_000);
+  for (let i = 0; i < 15; i++) assert.equal(off(await lookupOff('3017620422003', request)).name, 'Nutella');
+  // The clock jumps back an hour: the cooldown and these 15 reads now look like they are in the future.
+  t.mock.timers.setTime(0);
+  assert.equal(off(await lookupOff('3017620422003', request)).name, 'Nutella', 'reads resume at once');
+  assert.equal(urls.length, 17);
+});
+
 test('a saved Open Food Facts food works offline and keeps its source through backup and restore', async () => {
   const { db, close } = await emptyDb();
   const found = off(await lookupBarcode(db, '3017620422003', noKey, providers(null, nutella).request));

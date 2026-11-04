@@ -204,7 +204,10 @@ function admitOff(request: typeof fetch): boolean {
   const now = Date.now();
   const gate = offGates.get(request) ?? { reads: [], until: 0 };
   offGates.set(request, gate);
-  gate.reads = gate.reads.filter((t) => now - t < OFF_LIMIT.windowMs);
+  // A clock moved back makes reads and cooldowns look like the future; forget them, so the gate
+  // only ever waits out at most one window.
+  gate.reads = gate.reads.filter((t) => t <= now && now - t < OFF_LIMIT.windowMs);
+  if (gate.until - now > OFF_LIMIT.windowMs) gate.until = 0;
   if (now < gate.until || gate.reads.length >= OFF_LIMIT.reads) return false;
   gate.reads.push(now);
   return true;
