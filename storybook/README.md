@@ -37,8 +37,9 @@ there or the story fails with a missing method.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
 - `npm run test:storybook` opens all 50 stories at 390 × 844 px and fails unless its play function
-  finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
-  static build.
+  finishes without browser or console errors. It then resizes two App stories between 1280 and
+  320 px windows and fails unless each shows a centered 390 × 844 screen that only narrows. Set
+  `STORYBOOK_URL` to test another origin, such as a static build.
 
 `verify.mjs` drives Chromium through the `agent-browser` CLI. The orb preinstalls it. A CI runner
 needs Node ≥ 22.18, `npm ci`, `agent-browser` with its Chromium, and a server for Storybook, either

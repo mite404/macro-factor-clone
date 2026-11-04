@@ -22,8 +22,9 @@ import type { Db } from '../src/storage/migrations';
 const meta = {
   title: 'App',
   component: App,
-  // The live app fills the screen, as it does on a phone and in the Expo web build.
-  decorators: [(Story) => <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}><Story /></div>],
+  // An iPhone-sized, unframed screen at any window size, like the references; narrower windows shrink
+  // it. The app itself still fills the screen it runs on.
+  decorators: [(Story) => <div style={{ width: '100%', maxWidth: 390, height: 844, margin: '0 auto', display: 'flex', flexDirection: 'column' }}><Story /></div>],
 } satisfies Meta<typeof App>;
 export default meta;
 type Story = StoryObj<typeof meta>;
