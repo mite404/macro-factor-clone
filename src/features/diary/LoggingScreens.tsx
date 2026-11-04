@@ -79,7 +79,7 @@ export function FoodRow({ food, detail, hint = 'Log a portion of this food', onP
     style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, minHeight: 44,
       borderBottomWidth: 1, borderColor: p.border }, pressed && { opacity: 0.5 }]}>
     <View style={{ flex: 1, gap: 3 }}><Label size={13}>{food.name}</Label>
-      <Label size={11} muted>{food.brand ? `${food.brand}  ·  ` : ''}{macroLine(food)}  ·  100 {food.basis}{food.serving ? `  ·  ${servingText(food)}` : ''}</Label>
+      <Label size={11} muted>{food.brand ? `${food.brand}  ·  ` : ''}{macroLine(food)}  ·  {'100\u00a0'}{food.basis}{food.serving ? `  ·  ${servingText(food)}` : ''}</Label>
       {detail ? <Label size={11} muted>{detail}</Label> : null}</View>
     <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: p.field, alignItems: 'center', justifyContent: 'center' }}>
       <Label>+</Label>
