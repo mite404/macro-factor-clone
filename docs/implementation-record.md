@@ -64,7 +64,7 @@ the results. There are no open prerequisite PRs and no prerequisite CI blocker.
 | 04 | Manual targets | [PR #6][pr6], merged |
 | 05 | USDA lookup | [PR #7][pr7], merged |
 | 06 | Open Food Facts fallback | [PR #8][pr8], merged by worker; oracle corrections pending |
-| 07 | Camera scanning | Code-verified in this orb, uncommitted; native acceptance pending |
+| 07 | Camera scanning | [PR #10][pr10], oracle high finding fixed; native acceptance pending |
 | 08 | Weighed recipes | Queued after 07 |
 | 09 | Copy diary entries | Queued after 08 |
 | 10 | Weight history | Queued after 09 |
@@ -80,8 +80,9 @@ oracle corrections were still off main. Those touch `lookup.ts`; this ticket doe
 The Barcode tab's ▥ button opens `expo-camera` 58.0.14 for EAN-13, EAN-8, UPC-A and UPC-E codes.
 Permission is requested on that tap, never at startup. A ref lock accepts one detection per opening;
 the scan closes the camera, fills the field, and runs the existing resolver. ▥ rescans explicitly.
-Leaving the tab or a result unmounts the camera. Backgrounding relies on iOS suspending the capture
-session; no app code handles it. Denial shows Allow camera or Open Settings, with typed entry kept.
+Leaving the tab or a result unmounts the camera. expo-camera stops its session in the background and
+restarts it on return; no app code handles that. Denial shows Allow camera or Open Settings, with
+typed entry kept.
 `NSCameraUsageDescription` is set; the microphone description is omitted. No frames are stored.
 
 Observed in this orb: typecheck, lint, 34 Node tests, iOS export, 39 Storybook stories, and the
@@ -89,6 +90,10 @@ depth-4 nutrition-history check passed. A Storybook `expo-camera` stand-in fires
 render; removing the lock made `BarcodeScanOnceAndRescan` fail. The real web module rendered the
 denied state in headless Chromium. Untested: a real camera, the iOS prompt, background/foreground,
 VoiceOver, and the native build. The physical iPhone 12 Pro gate is pending.
+
+The oracle's high finding: a scanned UPC-E was read as EAN-8, so its check digit failed or it
+resolved to another GTIN. Scans of type `upc_e` now expand to UPC-A first; a Node test covers each
+expansion rule. Typed 8-digit codes still read as EAN-8. Low findings await the owner's review.
 
 ## Ticket 06 oracle corrections are required after shipping
 
@@ -454,6 +459,7 @@ No merges are authorized by this record. No native build has been verified by th
 [pr6]: https://github.com/mite404/macro-factor-clone/pull/6
 [pr7]: https://github.com/mite404/macro-factor-clone/pull/7
 [pr8]: https://github.com/mite404/macro-factor-clone/pull/8
+[pr10]: https://github.com/mite404/macro-factor-clone/pull/10
 [main06]:
   https://github.com/mite404/macro-factor-clone/commit/4d2c9ca30594542a9161ee4668bbb1a262abd31f
 [coordinator]: https://ampcode.com/threads/T-01a19290-a404-75d0-9b1c-735ad66c0b4e
