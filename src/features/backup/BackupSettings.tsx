@@ -19,7 +19,8 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 function describe(s: BackupSummary): string {
   const foods = count(s.foods, 'saved food', 'saved foods') + (s.archivedFoods ? ` (${s.archivedFoods} archived)` : '');
   const days = s.days === 0 ? '' : s.days === 1 ? ` on ${s.firstDay}` : ` on ${s.days} days, ${s.firstDay} to ${s.lastDay}`;
-  return `${foods} and ${count(s.entries, 'diary entry', 'diary entries')}${days}`;
+  const targets = s.targets ? `, plus ${count(s.targets, 'daily target', 'daily targets')}` : '';
+  return `${foods} and ${count(s.entries, 'diary entry', 'diary entries')}${days}${targets}`;
 }
 
 function StatusLine({ status }: { status: Status }) {
@@ -97,8 +98,8 @@ export default function BackupSettings({ onClose }: { onClose: () => void }) {
         </Card>
         <Card style={{ gap: 6, borderWidth: 1, borderColor: p.danger }}>
           <Label weight="600" style={{ color: p.danger }}>Everything in this app will be replaced</Label>
-          {current.foods + current.entries === 0
-            ? <Label>This app has no saved foods or diary entries yet, so nothing will be lost.</Label>
+          {current.foods + current.entries + current.targets === 0
+            ? <Label>This app has no saved foods, diary entries, or targets yet, so nothing will be lost.</Label>
             : <>
               <Label>Your current {describe(current)} will be deleted, not merged. This cannot be undone.</Label>
               <Label size={12} muted>If you might need them, cancel and export a backup first.</Label>
@@ -120,16 +121,16 @@ export default function BackupSettings({ onClose }: { onClose: () => void }) {
       <Card>
         <Label weight="600">Export a backup</Label>
         <Label size={13} muted>
-          Saves every food, including archived ones, and every diary entry to a JSON file you choose where to keep,
-          such as Files. The file is not encrypted, so keep it somewhere private.
+          Saves every food, including archived ones, every diary entry, and your daily targets to a JSON file you
+          choose where to keep, such as Files. The file is not encrypted, so keep it somewhere private.
         </Label>
         <Button primary onPress={exportFile}>Export backup</Button>
       </Card>
       <Card>
         <Label weight="600">Restore from a backup</Label>
         <Label size={13} muted>
-          Replaces all foods and diary entries in this app with a backup file's. You'll see what the file holds before
-          anything changes.
+          Replaces all foods, diary entries, and targets in this app with a backup file's. You'll see what the file
+          holds before anything changes.
         </Label>
         <Button onPress={chooseFile}>Choose backup file</Button>
       </Card>

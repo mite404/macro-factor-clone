@@ -4,6 +4,7 @@ import { expect, userEvent, waitFor, within } from 'storybook/test';
 import App from '../src/App';
 import { restoreBackup, type Backup } from '../src/features/backup/backup';
 import v1Backup from '../src/features/backup/backup-v1.json';
+import v2Backup from '../src/features/backup/backup-v2.json';
 import { insertEntry, localDay } from '../src/features/diary/diary';
 import { insertFood } from '../src/features/foods/foods';
 import type { Db } from '../src/storage/migrations';
@@ -159,7 +160,7 @@ export const MeasuredServingWithKeyboard: Story = {
 };
 
 export const BackupExport: Story = {
-  args: { onInit: (db) => restoreBackup(db, v1Backup as Backup) },
+  args: { onInit: (db) => restoreBackup(db, v2Backup as Backup) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const downloads: Blob[] = [];
@@ -177,7 +178,7 @@ export const BackupExport: Story = {
     }
     const exported = JSON.parse(await downloads[0].text());
     await expect(Date.parse(exported.exportedAt)).not.toBeNaN();
-    await expect({ ...exported, exportedAt: v1Backup.exportedAt }).toEqual(v1Backup);
+    await expect({ ...exported, exportedAt: v2Backup.exportedAt }).toEqual(v2Backup);
     await expect(canvas.queryByRole('alert')).toBeNull();
   },
 };
@@ -216,7 +217,7 @@ export const BackupRestoreRejectsInvalidFiles: Story = {
     const dangling = { ...v1Backup, diaryEntries: [{ ...v1Backup.diaryEntries[1], foodId: 3 }] };
     const files: [string, string][] = [
       ['{"format": "nutrition-diary-backup",', 'This file is not valid JSON, so it cannot be a backup.'],
-      [JSON.stringify({ ...v1Backup, version: 2 }), 'This backup was made by a newer version of the app (format 2). Update the app to restore it.'],
+      [JSON.stringify({ ...v2Backup, version: 3 }), 'This backup was made by a newer version of the app (format 3). Update the app to restore it.'],
       [JSON.stringify(dangling), 'Diary entry 7 refers to food 3, which is not in the backup.'],
     ];
     for (const [text, reason] of files) {

@@ -30,7 +30,25 @@ code is in `src/features/backup/`. `backup.ts` owns the format, validation, and 
 
 The file holds personal data in plain text. It is not encrypted, and the app never uploads it.
 Credentials, such as the USDA key planned for ticket 05, live in the iOS Keychain, not SQLite.
-Export reads only the tables above, so they cannot appear in a backup.
+Export reads only the tables in this document, so they cannot appear in a backup.
+
+## Version 2
+
+Version 2 adds `targets`, the one current set of daily targets. It mirrors the `targets` table.
+
+```json
+"targets": [{ "nutrient": "calories", "amount": 2000 }, { "nutrient": "protein", "amount": 100 }]
+```
+
+- `nutrient` is `calories`, `protein`, `carbs`, or `fat`, and appears at most once.
+- `amount` is above 0, in kcal for calories and grams for the macros. A nutrient without a target
+  has no record. There is no `0` or `null` target.
+- Targets are not dated. Diary entries keep their own nutrition, so restoring or editing targets
+  never changes logged history.
+
+A version 1 file has no `targets` field and restores with no targets. A version 1 file that has
+one is rejected as an unexpected field. `src/features/backup/backup-v2.json` is the version 2
+fixture.
 
 ## Restore rules
 
@@ -47,7 +65,7 @@ apply:
   file.
 
 The confirmation shows what the file holds and what will be deleted. Cancel changes nothing. Replace
-deletes both tables and inserts every record inside one SQLite transaction. If any write fails, the
+deletes every table and inserts every record inside one SQLite transaction. If any write fails, the
 transaction rolls back and the existing data stays.
 
 ## Extending the format
