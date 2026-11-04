@@ -31,7 +31,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 39 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 41 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -70,6 +70,8 @@ adds dependencies and needs the owner's approval.
 | `BarcodeOffLargeText` | No key: Open Food Facts directly; unknown protein and fat stay "?"; 1.5× text keeps figures whole |
 | `BarcodeScanOnceAndRescan` | One permission request; three repeated detections make one lookup; an explicit rescan makes one more |
 | `BarcodeScanDeniedTypeUnknown` | Denied camera offers Settings; a typed unknown code reaches Create food with the barcode filled in |
+| `BarcodeScanPromptOpen` | While the iOS prompt is open the scanner waits behind it, not reporting access off |
+| `BarcodeScanMountErrors` | A recovered media reset keeps the camera open; another mount error reports a failed start |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
 
 `main.ts` also aliases `expo-camera` to `camera.tsx`. Its permission answers follow iOS, and its

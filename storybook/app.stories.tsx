@@ -700,7 +700,7 @@ export const BarcodeOffFallbackSaveOffline: Story = {
 export const BarcodeScanOnceAndRescan: Story = {
   args: {
     onInit: async () => {
-      Object.assign(camera, { status: 'undetermined', answer: 'granted', requests: 0, scans: Array(3).fill('3017620422003') });
+      Object.assign(camera, { status: 'undetermined', answer: 'granted', requests: 0, scans: Array(3).fill('3017620422003'), mountError: '' });
       await stubLookups(null, [], [json(nutellaReply), json(nutellaReply)]);
     },
   },
@@ -724,7 +724,7 @@ export const BarcodeScanOnceAndRescan: Story = {
 export const BarcodeScanDeniedTypeUnknown: Story = {
   args: {
     onInit: async () => {
-      Object.assign(camera, { status: 'undetermined', answer: 'denied', requests: 0, scans: [] });
+      Object.assign(camera, { status: 'undetermined', answer: 'denied', requests: 0, scans: [], mountError: '' });
       await stubLookups(null, [], [offMiss]);
     },
   },
@@ -738,6 +738,35 @@ export const BarcodeScanDeniedTypeUnknown: Story = {
     await expect(await canvas.findByText('Not in Open Food Facts')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Create food' }));
     await expect(await canvas.findByDisplayValue('0000000000017')).toBeVisible();
+  },
+};
+
+// The iOS prompt is still open: the scanner waits behind it instead of reporting access off.
+export const BarcodeScanPromptOpen: Story = {
+  args: { onInit: async () => { Object.assign(camera, { status: 'undetermined', answer: 'undetermined', requests: 0, scans: [], mountError: '' }); } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Scan a barcode' }));
+    await waitFor(() => expect(camera.requests).toBe(1));
+    await expect(canvas.getByText(/Hold the barcode inside the square/)).toBeVisible();
+    await expect(canvas.queryByText('Camera access is off')).toBeNull();
+  },
+};
+
+// A media reset the camera recovered from keeps it open; any other mount error reports a failed start.
+export const BarcodeScanMountErrors: Story = {
+  args: { onInit: async () => { Object.assign(camera, { status: 'granted', answer: 'granted', requests: 0, scans: [], mountError: 'Camera session was reset' }); } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Scan a barcode' }));
+    await expect(await canvas.findByText(/Hold the barcode inside the square/)).toBeVisible();
+    await expect(canvas.queryByText("The camera couldn't start")).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
+    camera.mountError = 'Camera could not be started - busy';
+    await userEvent.click(canvas.getByRole('button', { name: 'Scan a barcode' }));
+    await expect(await canvas.findByText("The camera couldn't start")).toBeVisible();
   },
 };
 
