@@ -4,10 +4,11 @@
 // features that do not exist yet (camera Scan, AI, Library, Plate, Favorite, Impact on Targets). The
 // Barcode tab stands where the original's Scan tab is, for typed codes until the camera lands.
 import type { ReactNode } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Linking, Pressable, TextInput, View } from 'react-native';
 
 import { Button, Card, Field, Label, Macros, palettes, Phone, Row, SearchBar, Segments, usePalette } from '../../ui';
 import type { Food, FoodForm, FoodFormErrors, FoodInput, Provenance } from '../foods/foods';
+import { ODBL_URL, OFF_SOURCE } from '../lookup/lookup';
 import { compareTargets, NUTRIENTS, type TargetRow, type Targets } from '../goals/goals';
 import { addDays, dayTotals, localDay, parseAmount, type Entry, type EntryForm, type FormErrors, type MacroTotal, type Nutrition, type Portion, type Unit } from './diary';
 
@@ -300,19 +301,26 @@ export function FoodTitle({ food, backLabel, onBack }: { food: FoodInput & Prove
       {food.brand ? <Label size={11} muted>{food.brand}</Label> : null}</View></Row>;
 }
 
-// One labelled value in a food's facts card, divided like the targets card rows.
-function Fact({ name, value, first = false }: { name: string; value: string; first?: boolean }) {
+// One labelled value in a food's facts card, divided like the targets card rows. A `url` makes
+// the value a link that opens in the browser.
+function Fact({ name, value, url, first = false }: { name: string; value: string; url?: string; first?: boolean }) {
   const p = usePalette();
+  const text = <Label size={12} style={[{ textAlign: 'right' }, url ? { textDecorationLine: 'underline' } : null]}>{value}</Label>;
   return <Row style={{ gap: 12, alignItems: 'flex-start', paddingVertical: 10, borderTopWidth: first ? 0 : 1, borderColor: p.border }}>
     <Label size={12} muted style={{ flex: 1 }}>{name}</Label>
-    <Label size={12} style={{ flex: 2, textAlign: 'right' }}>{value}</Label>
+    {url ? <Pressable accessibilityRole="link" accessibilityHint="Opens in your browser" onPress={() => Linking.openURL(url)}
+      hitSlop={12} style={({ pressed }) => [{ flex: 2, alignItems: 'flex-end' }, pressed && { opacity: 0.5 }]}>{text}</Pressable>
+      : <View style={{ flex: 2 }}>{text}</View>}
   </Row>;
 }
 
-/** Barcode, serving, and where an imported food came from. `published` is the provider's record date. */
+/**
+ * Barcode, serving, and where an imported food came from, with the license for Open Food Facts
+ * data. `published` is the provider's record date.
+ */
 export function FoodFacts({ food, published, saved }: { food: FoodInput & Provenance; published?: string | null; saved: string }) {
   const p = usePalette();
-  const record = food.source ? `${food.source.id.replace('fdc:', '')}${published ? `, published ${published}` : ''}` : null;
+  const record = food.source ? `${food.source.id.replace(/^(fdc|off):/, '')}${published ? `, published ${published}` : ''}` : null;
   return <Card style={{ paddingVertical: 4, gap: 0, borderWidth: 1, borderColor: p.border }}>
     {[
       food.barcode ? ['Barcode', food.barcode] : null,
@@ -320,7 +328,8 @@ export function FoodFacts({ food, published, saved }: { food: FoodInput & Proven
       food.source ? ['Source', food.source.name] : null,
       record ? ['Record', record] : null,
       food.source ? [saved, food.source.retrievedOn] : null,
-    ].filter(row => row !== null).map(([name, value], i) => <Fact key={name} first={i === 0} name={name} value={value} />)}
+      food.source?.name === OFF_SOURCE ? ['License', 'Open Database License', ODBL_URL] : null,
+    ].filter(row => row !== null).map(([name, value, url], i) => <Fact key={name} first={i === 0} name={name} value={value} url={url} />)}
   </Card>;
 }
 

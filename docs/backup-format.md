@@ -66,6 +66,11 @@ Version 3 adds `brand` to each food: the brand a provider reported, such as USDA
   keeps its brand, and edits never change `brand` or the source fields.
 - A USDA import sets `sourceId` to `fdc:` and its FoodData Central id, `sourceName` to `USDA
   FoodData Central`, and `retrievedOn` to the day it was saved.
+- An Open Food Facts import sets `sourceId` to `off:` and the product code Open Food Facts
+  returned, `sourceName` to `Open Food Facts`, and `retrievedOn` to the day it was saved. It needs
+  no new field, so version 3 holds it unchanged. Its data is under the
+  [Open Database License](https://opendatacommons.org/licenses/odbl/1.0/), which the food detail
+  links.
 - `barcode` keeps the digits as typed, leading zeros included. Lookup compares barcodes as GTINs,
   so `077034085228` and `0077034085228` find the same food. Restore still accepts any digits, as
   earlier versions did, so a barcode saved before check digits were validated restores unchanged.

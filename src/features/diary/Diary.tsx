@@ -6,9 +6,9 @@ import {
   archiveFood, insertFood, logPortion, parseFoodForm, searchFoods, updateFood,
   type Food, type FoodForm, type FoodFormErrors,
 } from '../foods/foods';
-import { BarcodeLookup, UsdaReview } from '../lookup/BarcodeScreens';
+import { BarcodeLookup, ProviderReview } from '../lookup/BarcodeScreens';
 import { loadUsdaKey } from '../lookup/key';
-import { lookupBarcode, type Lookup, type UsdaFood } from '../lookup/lookup';
+import { lookupBarcode, lookupOff, type Lookup, type Miss, type ProviderFood } from '../lookup/lookup';
 import { loadTargets, parseTargets, saveTargets, type TargetErrors, type Targets } from '../goals/goals';
 import { TargetsForm } from '../goals/TargetsForm';
 import {
@@ -26,7 +26,7 @@ type View =
   | { kind: 'entry'; id: number | null; form: EntryForm; portion: Entry['portion'] }
   | { kind: 'search' }
   | BarcodeView
-  | { kind: 'usda'; food: UsdaFood; back: BarcodeView }
+  | { kind: 'review'; food: ProviderFood; back: BarcodeView }
   | { kind: 'food'; food: Food; quantity: string; unit: Unit | 'serving' }
   | { kind: 'edit'; id: number | null; form: FoodForm; from: Food | null; back: View }
   | { kind: 'settings'; back: View }
@@ -64,7 +64,7 @@ export default function Diary() {
   const [error, setError] = useState('');
   // Synchronous lock: a second tap can land before React re-renders after the first.
   const writing = useRef(false);
-  // Bumped by every navigation and lookup, so a late USDA reply never lands on another screen or code.
+  // Bumped by every navigation and lookup, so a late provider reply never lands on another screen or code.
   const lookups = useRef(0);
 
   const reload = useCallback(async () => {
@@ -99,13 +99,14 @@ export default function Diary() {
     }
   }
 
-  async function lookUp(code: string) {
+  // Looks `code` up from the start, or, given USDA's outcome `after`, asks Open Food Facts alone.
+  async function lookUp(code: string, after: Miss | null = null) {
     const id = ++lookups.current;
-    setView({ kind: 'barcode', code, result: null, looking: true });
+    setView({ kind: 'barcode', code, result: after, looking: true });
     setError('');
-    let result: Lookup | null = null;
+    let result: Lookup | null = after;
     try {
-      result = await lookupBarcode(db, code, loadUsdaKey);
+      result = after ? { ...after, off: await lookupOff(code) } : await lookupBarcode(db, code, loadUsdaKey);
     } catch {
       if (lookups.current === id) setError('Could not check your saved foods. Try again.');
     }
@@ -156,14 +157,15 @@ export default function Diary() {
         setView({ kind: 'barcode', code: text, result: null, looking: false });
       }}
       onLookUp={() => !looking && lookUp(code)} onFood={food => go(foodView(food))}
-      onUsda={food => go({ kind: 'usda', food, back: view })}
+      onOff={miss => !looking && lookUp(code, miss)}
+      onReview={food => go({ kind: 'review', food, back: view })}
       onKey={() => go({ kind: 'settings', back: { ...view, result: null } })}
       onCreate={() => go({ kind: 'edit', id: null, form: blankFood('', looked), from: null, back: view })} />;
   }
 
-  if (view.kind === 'usda') {
+  if (view.kind === 'review') {
     const { food, back } = view;
-    return <UsdaReview summary={summary} food={food} error={error} onClose={close} onBack={() => go(back)}
+    return <ProviderReview summary={summary} food={food} error={error} onClose={close} onBack={() => go(back)}
       onSave={() => write(async () => {
         const id = await insertFood(db, food, food);
         return foodView({ ...food, id });

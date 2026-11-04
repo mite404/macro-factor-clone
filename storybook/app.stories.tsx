@@ -10,6 +10,8 @@ import { insertEntry, localDay } from '../src/features/diary/diary';
 import { insertFood } from '../src/features/foods/foods';
 import { saveTargets } from '../src/features/goals/goals';
 import { deleteUsdaKey, saveUsdaKey } from '../src/features/lookup/key';
+import nutellaReply from '../src/features/lookup/off-product-nutella.json';
+import offMissReply from '../src/features/lookup/off-product-not-found.json';
 import cheeriosReply from '../src/features/lookup/usda-search-cheerios.json';
 import karsReply from '../src/features/lookup/usda-search-kars.json';
 import type { Db } from '../src/storage/migrations';
@@ -395,24 +397,31 @@ export const BackupRestoreInProgressLocksNavigation: Story = {
   },
 };
 
-// USDA replies the next lookups get, in order, and the URLs requested. Other requests pass through.
+// The replies the next USDA and Open Food Facts lookups get, in order, and the URLs requested.
+// Other requests pass through; an unexpected provider request fails the story.
 type Reply = (signal?: AbortSignal | null) => Promise<Response>;
-let usdaReplies: Reply[] = [];
+const hosts = { usda: 'https://api.nal.usda.gov/', off: 'https://world.openfoodfacts.org/' } as const;
+let replies: Record<keyof typeof hosts, Reply[]> = { usda: [], off: [] };
 const usdaCalls: string[] = [];
+const offCalls: string[] = [];
 const json = (body: unknown, status = 200): Reply => async () => new Response(JSON.stringify(body), { status });
+const offMiss = json(offMissReply, 404);
 const kars = karsReply.foods[0];
 const cheerios = cheeriosReply.foods[0];
 
-async function stubUsda(key: string | null, replies: Reply[]) {
+async function stubLookups(key: string | null, usda: Reply[], off: Reply[] = []) {
   await (key ? saveUsdaKey(key) : deleteUsdaKey());
-  usdaReplies = replies;
+  replies = { usda, off };
   usdaCalls.length = 0;
+  offCalls.length = 0;
   const original = window.fetch.bind(window);
   window.fetch = async (input, init) => {
-    if (!String(input).startsWith('https://api.nal.usda.gov/')) return original(input, init);
-    usdaCalls.push(String(input));
-    const reply = usdaReplies.shift();
-    if (!reply) throw new Error(`unexpected USDA request ${String(input)}`);
+    const url = String(input);
+    const host = url.startsWith(hosts.usda) ? 'usda' : url.startsWith(hosts.off) ? 'off' : null;
+    if (!host) return original(input, init);
+    (host === 'usda' ? usdaCalls : offCalls).push(url);
+    const reply = replies[host].shift();
+    if (!reply) throw new Error(`unexpected ${host} request ${url}`);
     return reply(init?.signal);
   };
 }
@@ -430,7 +439,7 @@ export const BarcodeSavedFoodOffline: Story = {
   args: {
     onInit: async (db) => {
       await insertFood(db, savedKars, karsSource);
-      await stubUsda(null, []);
+      await stubLookups(null, []);
     },
   },
   play: async ({ canvasElement }) => {
@@ -439,8 +448,8 @@ export const BarcodeSavedFoodOffline: Story = {
     await expect(await canvas.findByText('Type a barcode')).toBeVisible();
     await lookUp(canvas, '0 0770 34085 228');
     await expect(await canvas.findByText('In your saved foods')).toBeVisible();
-    await expect(canvas.getByText('Found on this phone, so nothing was sent to USDA.')).toBeVisible();
-    await expect(usdaCalls).toEqual([]);
+    await expect(canvas.getByText('Found on this phone, so nothing was looked up online.')).toBeVisible();
+    await expect([...usdaCalls, ...offCalls]).toEqual([]);
     await userEvent.click(canvas.getByRole('button', { name: "NUT 'N BERRY MIX, KAR'S, 500 kilocalories per 100 g" }));
     await expect(await canvas.findByText('Edits change only this saved copy, not past diary entries.')).toBeVisible();
     await expect(canvas.getByText('USDA FoodData Central')).toBeVisible();
@@ -450,7 +459,7 @@ export const BarcodeSavedFoodOffline: Story = {
 };
 
 export const BarcodeUsdaReviewSaveAndRepeat: Story = {
-  args: { onInit: () => stubUsda('storybook-fake-key', [json({ foods: [cheerios, kars] })]) },
+  args: { onInit: () => stubLookups('storybook-fake-key', [json({ foods: [cheerios, kars] })]) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: 'Search for a food' }));
@@ -481,12 +490,13 @@ export const BarcodeUsdaReviewSaveAndRepeat: Story = {
     await lookUp(canvas, '077034085228');
     await expect(await canvas.findByText('In your saved foods')).toBeVisible();
     await expect(usdaCalls).toHaveLength(1);
+    await expect(offCalls).toEqual([]);
   },
 };
 
 export const BarcodeMultipleRecords: Story = {
   args: {
-    onInit: () => stubUsda('storybook-fake-key', [json({ foods: [
+    onInit: () => stubLookups('storybook-fake-key', [json({ foods: [
       kars,
       { ...kars, fdcId: 999, gtinUpc: '00077034085228', publishedDate: '2024-03-01', description: "NUT 'N BERRY MIX, NEW RECIPE" },
       { ...kars, fdcId: 7, foodNutrients: [{ nutrientId: 1008, unitName: 'KCAL', value: -5 }] },
@@ -505,13 +515,13 @@ export const BarcodeMultipleRecords: Story = {
 
 export const BarcodeLookupErrors: Story = {
   args: {
-    onInit: () => stubUsda(null, [
+    onInit: () => stubLookups(null, [
       json({ error: { code: 'OVER_RATE_LIMIT' } }, 429),
       async () => { throw new TypeError('Failed to fetch'); },
       json({ error: { code: 'API_KEY_INVALID' } }, 403),
       json({ totalHits: 0, foods: [] }),
       json(cheeriosReply),
-    ]),
+    ], [offMiss, offMiss]),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -521,8 +531,11 @@ export const BarcodeLookupErrors: Story = {
     await lookUp(canvas, '77034085228');
     await expect(await canvas.findByRole('alert')).toHaveTextContent('A barcode has 8, 12, 13, or 14 digits');
 
+    // With no key, Open Food Facts is asked directly.
     await lookUp(canvas, '077034085228');
     await expect(await canvas.findByText('Not in your saved foods')).toBeVisible();
+    await expect(canvas.getByText('Not in Open Food Facts')).toBeVisible();
+    await expect([usdaCalls.length, offCalls.length]).toEqual([0, 1]);
     await userEvent.click(canvas.getByRole('button', { name: 'Open Settings' }));
     const key = await canvas.findByLabelText('USDA API key');
     await userEvent.type(key, 'storybook-fake-key');
@@ -539,22 +552,27 @@ export const BarcodeLookupErrors: Story = {
     for (const [title, action] of outcomes) {
       await expect(await canvas.findByText(title)).toBeVisible();
       await expect(canvas.getByRole('button', { name: 'Create food' })).toBeVisible();
+      // A USDA failure is not a miss: Open Food Facts waits to be asked.
+      await expect(canvas.getByRole('button', { name: 'Try Open Food Facts' })).toBeVisible();
       if (action === 'Try again') await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
     }
+    await expect(offCalls).toHaveLength(1);
     await lookUp(canvas, '077034085228');
     await expect(await canvas.findByText('No USDA match')).toBeVisible();
+    await expect(canvas.getByText('Open Food Facts has no product with this barcode either. Create the food from its label; the barcode is filled in.')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Create food' }));
     await expect(await canvas.findByLabelText('Barcode, optional')).toHaveValue('077034085228');
     await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
     await lookUp(canvas, '016000275287');
     await expect(await canvas.findByText("USDA's nutrition can't be used")).toBeVisible();
     await expect(usdaCalls).toHaveLength(5);
+    await expect(offCalls).toHaveLength(2);
   },
 };
 
 export const BarcodeTimeoutRecovers: Story = {
   args: {
-    onInit: () => stubUsda('storybook-fake-key', [
+    onInit: () => stubLookups('storybook-fake-key', [
       (signal) => new Promise((_, reject) => signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))),
       json({ foods: [kars] }),
     ]),
@@ -563,7 +581,7 @@ export const BarcodeTimeoutRecovers: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
     await lookUp(canvas, '077034085228');
-    await expect(await canvas.findByText('Checking saved foods, then USDA…')).toBeVisible();
+    await expect(await canvas.findByText('Checking saved foods, then USDA and Open Food Facts…')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Look up barcode' })).toHaveAttribute('aria-disabled', 'true');
     await expect(await canvas.findByText("USDA didn't answer", {}, { timeout: 12_000 })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
@@ -572,7 +590,7 @@ export const BarcodeTimeoutRecovers: Story = {
 };
 
 export const UsdaKeySettings: Story = {
-  args: { onInit: () => stubUsda(null, []) },
+  args: { onInit: () => stubLookups(null, []) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: 'Settings' }));
@@ -596,7 +614,7 @@ export const UsdaKeySettings: Story = {
 };
 
 export const BarcodeLargeText: Story = {
-  args: { onInit: () => stubUsda('storybook-fake-key', [json({ foods: [kars] })]) },
+  args: { onInit: () => stubLookups('storybook-fake-key', [json({ foods: [kars] })]) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
@@ -615,5 +633,100 @@ export const BarcodeLargeText: Story = {
     const retrieved = canvas.getByText('Retrieved');
     retrieved.scrollIntoView({ block: 'end' });
     await waitFor(() => expect(retrieved.getBoundingClientRect().bottom).toBeLessThanOrEqual(save.getBoundingClientRect().top));
+  },
+};
+
+const nutellaRow = 'Nutella, Nutella, Ferrero, 539 kilocalories per 100 g';
+// Records links the app opens instead of leaving the story.
+function captureOpens() {
+  const opened: string[] = [];
+  window.open = (url) => {
+    opened.push(String(url));
+    return null;
+  };
+  return opened;
+}
+
+export const BarcodeOffFallbackSaveOffline: Story = {
+  args: { onInit: () => stubLookups('storybook-fake-key', [json({ totalHits: 0, foods: [] })], [json(nutellaReply)]) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const opened = captureOpens();
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await lookUp(canvas, '3017620422003');
+    await expect(await canvas.findByText('No USDA match. Open Food Facts has one product with exactly this barcode. Open it to check the nutrition before saving.')).toBeVisible();
+    await expect(canvas.getByText('Open Food Facts product 3017620422003')).toBeVisible();
+    await expect(new URL(offCalls[0]).pathname).toBe('/api/v3.5/product/3017620422003');
+
+    await userEvent.click(canvas.getByRole('button', { name: nutellaRow }));
+    await expect(await canvas.findByText('Nothing is saved until you tap Save food.')).toBeVisible();
+    await expect(canvas.getByText('Per 100 g: 539 kcal · P 6.3 · C 57.5 · F 30.9 g')).toBeVisible();
+    await expect(canvas.getByText('Open Food Facts')).toBeVisible();
+    await userEvent.click(canvas.getByRole('link', { name: 'Open Database License' }));
+    await expect(opened).toEqual(['https://opendatacommons.org/licenses/odbl/1.0/']);
+    await userEvent.click(canvas.getByRole('button', { name: 'Save food' }));
+
+    // Saved: the food detail keeps its source and license, and logs with no network.
+    await expect(await canvas.findByText('Edits change only this saved copy, not past diary entries.')).toBeVisible();
+    await expect(canvas.getByRole('link', { name: 'Open Database License' })).toBeVisible();
+    await userEvent.type(canvas.getByLabelText('Amount in grams'), '20');
+    await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
+    await expect(await canvas.findByRole('button', { name: /^Nutella, 20 g, 107.8 kilocalories/ })).toBeVisible();
+    window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+    await userEvent.click(canvas.getByRole('button', { name: 'Look up a barcode' }));
+    await lookUp(canvas, '03017620422003');
+    await expect(await canvas.findByText('In your saved foods')).toBeVisible();
+    await expect([usdaCalls.length, offCalls.length]).toEqual([1, 1]);
+  },
+};
+
+export const BarcodeUsdaLimitOffersOff: Story = {
+  args: {
+    onInit: () => stubLookups('storybook-fake-key', [json({ error: { code: 'OVER_RATE_LIMIT' } }, 429)],
+      [json({}, 503), json(nutellaReply)]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await lookUp(canvas, '3017620422003');
+    await expect(await canvas.findByText("USDA's hourly limit is used up")).toBeVisible();
+    await expect(offCalls).toEqual([]);
+    await userEvent.click(canvas.getByRole('button', { name: 'Try Open Food Facts' }));
+    await expect(await canvas.findByText('Open Food Facts is busy')).toBeVisible();
+    await expect(canvas.getByText("USDA's hourly limit is used up")).toBeVisible();
+    // Try again repeats only the Open Food Facts request; USDA is not asked again.
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
+    await expect(await canvas.findByText("USDA's hourly limit is used up. Open Food Facts has one product with exactly this barcode. Open it to check the nutrition before saving.")).toBeVisible();
+    await expect([usdaCalls.length, offCalls.length]).toEqual([1, 2]);
+  },
+};
+
+// Nutella with no protein or fat in its label record: both stay unknown.
+const partialNutella = (() => {
+  const { proteins: _, fat: __, ...nutrients } = nutellaReply.product.nutrition.aggregated_set.nutrients;
+  return { ...nutellaReply, product: { ...nutellaReply.product, nutrition: { aggregated_set: { ...nutellaReply.product.nutrition.aggregated_set, nutrients } } } };
+})();
+
+export const BarcodeOffLargeText: Story = {
+  args: { onInit: () => stubLookups(null, [], [json(partialNutella)]) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Look up a barcode' }));
+    await lookUp(canvas, '3017620422003');
+    await expect(await canvas.findByText('Not in your saved foods. Open Food Facts has one product with exactly this barcode. Open it to check the nutrition before saving.')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: nutellaRow }));
+    await expect(await canvas.findByText('Open Food Facts lists no protein or fat. It stays unknown in your log, not 0.')).toBeVisible();
+    await expect(canvas.getByText('Per 100 g: 539 kcal · P ? · C 57.5 · F ? g')).toBeVisible();
+    enlargeText(canvasElement);
+    await waitFor(() => {
+      for (const text of ['539', '57.5', 'Open Database License', '3017620422003']) {
+        const el = canvas.getAllByText(text)[0];
+        expect(el.scrollWidth, `${text} is cut off`).toBeLessThanOrEqual(el.clientWidth);
+      }
+    });
+    const save = canvas.getByRole('button', { name: 'Save food' });
+    const license = canvas.getByRole('link', { name: 'Open Database License' });
+    license.scrollIntoView({ block: 'end' });
+    await waitFor(() => expect(license.getBoundingClientRect().bottom).toBeLessThanOrEqual(save.getBoundingClientRect().top));
   },
 };

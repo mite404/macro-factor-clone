@@ -5,7 +5,7 @@ The MacroFactor reference screens are the app's UI. Their component kit moved fr
 `CreateFood` moved to `src/features/diary/LoggingScreens.tsx`, where fixtures became props and
 disabled buttons became callbacks. `src/features/goals/TargetsForm.tsx` follows `CreateFood`'s
 layout. `src/features/lookup/BarcodeScreens.tsx` adds the logger's Barcode tab, in the place of the
-reference's Scan tab, and a USDA record review that follows `FoodDetail`.
+reference's Scan tab, and a USDA or Open Food Facts record review that follows `FoodDetail`.
 `src/features/diary/Diary.tsx` wires them to SQLite. The
 `App` stories render that production app.
 
@@ -31,7 +31,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 33 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 36 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -65,10 +65,14 @@ adds dependencies and needs the owner's approval.
 | `BarcodeTimeoutRecovers` | A USDA request with no reply shows the loading state, then the timeout, then Try again succeeds |
 | `UsdaKeySettings` | Blank and malformed keys rejected, key saved masked and never shown, then removed |
 | `BarcodeLargeText` | At 1.5× text the USDA review keeps every figure whole and scrolls clear of Save food |
+| `BarcodeOffFallbackSaveOffline` | USDA miss falls back to Open Food Facts; review, license link, save, log 20 g, repeat lookup offline |
+| `BarcodeUsdaLimitOffersOff` | USDA 429 asks nothing else; Try Open Food Facts, its 503, then Try again asks only Open Food Facts |
+| `BarcodeOffLargeText` | No key: Open Food Facts directly; unknown protein and fat stay "?"; 1.5× text keeps figures whole |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
 
-Barcode stories stub `window.fetch` for `api.nal.usda.gov` with fixtures and use a fake key held in
-memory by `key.web.ts`. They never call USDA or touch a Keychain.
+Barcode stories stub `window.fetch` for `api.nal.usda.gov` and `world.openfoodfacts.org` with
+recorded fixtures and use a fake key held in memory by `key.web.ts`. They never call either
+provider or touch a Keychain.
 
 These are browser checks of React Native Web. They do not verify native iOS layout, keyboard,
 VoiceOver, or expo-sqlite on the device. See `docs/ios-builds.md`.
