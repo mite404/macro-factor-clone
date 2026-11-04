@@ -102,6 +102,9 @@ test('rejects invalid foods and keeps unknown nutrients unknown', async () => {
   assert.ok('errors' in parseFoodForm(form({ name: ' ' })), 'blank name');
   assert.ok('errors' in parseFoodForm(form({ barcode: '12 34' })), 'non-digit barcode');
   assert.deepEqual(parseFoodForm(form({ barcode: '0012345678906' })), { errors: { barcode: "The last digit doesn't match. Check each digit" } });
+  const legacy = parseFoodForm(form({ barcode: '0070', calories: '140' }), '0070');
+  assert.equal('food' in legacy && legacy.food.barcode, '0070', 'an unchanged pre-validation barcode saves as stored');
+  assert.deepEqual(parseFoodForm(form({ barcode: '0071' }), '0070'), { errors: { barcode: 'A barcode has 8, 12, 13, or 14 digits' } });
   await assert.rejects(insertFood(db, { ...valid({}), serving: { name: 'scoop', amount: 0 } }));
 
   const bar = await save(db, { name: 'Protein bar', barcode: ' 0012345678905 ', protein: '', calories: '0' });

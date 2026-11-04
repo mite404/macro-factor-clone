@@ -26,7 +26,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const yogurt = { name: 'Greek yogurt', basis: 'g', calories: 123, protein: 8, carbs: null, fat: null, serving: null, barcode: null } as const;
+// "0070" predates check-digit validation; editing other fields must still save.
+const yogurt = { name: 'Greek yogurt', basis: 'g', calories: 123, protein: 8, carbs: null, fat: null, serving: null, barcode: '0070' } as const;
 
 async function seedYogurtLog(db: Db) {
   const foodId = await insertFood(db, yogurt);
