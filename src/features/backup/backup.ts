@@ -75,7 +75,7 @@ const orNull = (check: Check): Check => (v) => v === null || check(v);
 const foodFields: Record<keyof BackupFood, Check> = {
   id, name: nonEmpty, basis: unit, calories: amount, protein: orNull(amount), carbs: orNull(amount), fat: orNull(amount),
   servingName: orNull(nonEmpty), servingAmount: orNull(positive), barcode: orNull(digits), brand: orNull(nonEmpty),
-  sourceId: orNull(text), sourceName: orNull(text), retrievedOn: orNull(text), archived: (v) => typeof v === 'boolean',
+  sourceId: orNull(nonEmpty), sourceName: orNull(nonEmpty), retrievedOn: orNull(nonEmpty), archived: (v) => typeof v === 'boolean',
 };
 const entryFields: Record<keyof BackupEntry, Check> = {
   id, day, label: text, calories: amount, protein: orNull(amount), carbs: orNull(amount), fat: orNull(amount),
@@ -131,6 +131,8 @@ function backupError(raw: unknown): string | null {
   if (problem) return `${problem}.`;
   const badFood = foods.find((f) => (f.servingName === null) !== (f.servingAmount === null));
   if (badFood) return `Food ${badFood.id} has a serving name without an amount, or an amount without a name.`;
+  const badSource = foods.find((f) => new Set([f.sourceId, f.sourceName, f.retrievedOn].map((v) => v === null)).size > 1);
+  if (badSource) return `Food ${badSource.id} has a source id, name, and date that are not all set.`;
   const badPortion = entries.find((e) => (e.amount === null) !== (e.unit === null));
   if (badPortion) return `Diary entry ${badPortion.id} has an amount without a unit, or a unit without an amount.`;
   const foodIds = new Set(foods.map((f) => f.id));
