@@ -19,6 +19,7 @@ import {
   type Food,
   type FoodForm,
 } from '../../../../src/features/foods/foods.ts';
+import { loadTargets, parseTargets, saveTargets, type Targets } from '../../../../src/features/goals/goals.ts';
 import { migrate, migrations, type Db } from '../../../../src/storage/migrations.ts';
 import { openTestDb } from '../../../../src/storage/testDb.ts';
 
@@ -26,7 +27,7 @@ type Nut = { calories: number; protein: number | null; carbs: number | null; fat
 type Template = { form: FoodForm; per100: Nut; serving: { name: string; amount: number } | null; barcode: string | null };
 type Slot = { id: number; t: Template; archived: boolean } | null;
 type ExpectedEntry = Omit<Entry, 'id'>;
-type State = { slots: [Slot, Slot]; entries: ExpectedEntry[]; saves: number; rejected: boolean };
+type State = { slots: [Slot, Slot]; entries: ExpectedEntry[]; targets: Targets; saves: number; rejected: boolean };
 type Op = { name: string; words: string; slot: 0 | 1; next: (s: State) => State | null };
 type Failure = { property: string; detail: string };
 class PropertyFailure extends Error {
@@ -77,6 +78,9 @@ const RICE: Template = {
 };
 const CORRECTION = { label: ' Fixed ', calories: '200', protein: '', carbs: '0', fat: '3,5' };
 const CORRECTED = { label: 'Fixed', calories: 200, protein: null, carbs: 0, fat: 3.5 };
+// Target forms as typed, and the one current set each must leave. Blank means no target.
+const SET_TARGETS = { calories: '2000', protein: '100', carbs: '', fat: '' };
+const EDIT_TARGETS = { calories: '', protein: ' 120 ', carbs: '', fat: '62,5' };
 const LEGACY: ExpectedEntry = { day: DAY, label: 'Old', calories: 300, protein: null, carbs: 0, fat: null, portion: null };
 
 const near = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
@@ -132,6 +136,8 @@ const ops: Op[] = [
     name: 'restore', slot: 0, words: 'export a backup as JSON, parse it, restore it into a new database file, and use that file',
     next: (s) => ({ ...s, rejected: false }),
   },
+  { name: 'setTargets', slot: 0, words: 'set targets: 2000 kcal and 100 g protein, carbs and fat blank', next: (s) => ({ ...s, targets: { calories: 2000, protein: 100 }, rejected: false }) },
+  { name: 'editTargets', slot: 0, words: 'edit targets: calories blank, protein 120, fat 62,5', next: (s) => ({ ...s, targets: { protein: 120, fat: 62.5 }, rejected: false }) },
   {
     name: 'failedRestores', slot: 0,
     words: 'try to restore a backup whose entry refers to a missing food, then a valid backup whose middle write fails',
@@ -183,11 +189,18 @@ async function compareArchived(db: Db, s: State): Promise<Failure | null> {
   return { property: 'F3 archived-food-kept', detail: `expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(actual)}` };
 }
 
+async function compareTargets(db: Db, s: State): Promise<Failure | null> {
+  const actual = { ...(await loadTargets(db)) };
+  if (isDeepStrictEqual(s.targets, actual)) return null;
+  return { property: 'T1 targets-current', detail: `expected ${JSON.stringify(s.targets)}\n  actual   ${JSON.stringify(actual)}` };
+}
+
 // Every stored row, read with SQL, so a failed restore can be compared with the data before it.
 async function dump(db: Db): Promise<string> {
   const foods = await db.getAllAsync('SELECT * FROM foods ORDER BY id', []);
   const entries = await db.getAllAsync('SELECT * FROM diary_entries ORDER BY id', []);
-  return JSON.stringify({ foods, entries });
+  const targets = await db.getAllAsync('SELECT * FROM targets ORDER BY nutrient', []);
+  return JSON.stringify({ foods, entries, targets });
 }
 
 // Both restores must fail and leave every row as it was: the bad file before any write, the good
@@ -240,7 +253,11 @@ async function parsedFood(t: Template) {
 // Drives the real code the way Diary.tsx and BackupSettings.tsx do. Returns whether logPortion rejected.
 async function apply(db: Db, op: Op, before: State, after: State): Promise<boolean> {
   const slot = before.slots[op.slot] ?? after.slots[op.slot];
-  if (op.name.startsWith('save')) {
+  if (op.name === 'setTargets' || op.name === 'editTargets') {
+    const parsed = parseTargets(op.name === 'setTargets' ? SET_TARGETS : EDIT_TARGETS);
+    if ('errors' in parsed) throw new Error(`valid targets rejected: ${JSON.stringify(parsed.errors)}`);
+    await saveTargets(db, parsed.targets);
+  } else if (op.name.startsWith('save')) {
     const id = await insertFood(db, await parsedFood(after.slots[op.slot]!.t));
     if (id !== slot!.id) throw new Error(`insertFood returned id ${id}, expected ${slot!.id}`);
   } else if (op.name.startsWith('edit')) {
@@ -271,7 +288,7 @@ async function run(legacy: boolean, seq: Op[]): Promise<{ failure: Failure; step
   const dir = mkdtempSync(join(SCRATCH, 'nutrition-check-'));
   let path = join(dir, 'nutrition.db');
   let { db, close } = openTestDb(path);
-  let s: State = { slots: [null, null], entries: legacy ? [LEGACY] : [], saves: 0, rejected: false };
+  let s: State = { slots: [null, null], entries: legacy ? [LEGACY] : [], targets: {}, saves: 0, rejected: false };
   let step = 0;
   try {
     if (legacy) {
@@ -301,7 +318,8 @@ async function run(legacy: boolean, seq: Op[]): Promise<{ failure: Failure; step
       const failure =
         rejected !== s.rejected
           ? { property: 'H4 unit-rejection', detail: `logPortion ${rejected ? 'rejected' : 'accepted'}; the spec says ${s.rejected ? 'reject' : 'accept'}` }
-          : (compareEntries(s.entries, await listEntries(db, DAY)) ?? compareFoods(s, await searchFoods(db, '')) ?? (await compareArchived(db, s)));
+          : (compareEntries(s.entries, await listEntries(db, DAY)) ?? compareFoods(s, await searchFoods(db, '')) ??
+            (await compareArchived(db, s)) ?? (await compareTargets(db, s)));
       if (failure) return { failure, steps: step + 1 };
     }
     return null;
@@ -323,7 +341,7 @@ async function main() {
   // Iterative deepening, so the first counterexample is a shortest one.
   for (let depth = 1; depth <= DEPTH; depth++) {
     for (const legacy of [false, true]) {
-      const start: State = { slots: [null, null], entries: legacy ? [LEGACY] : [], saves: 0, rejected: false };
+      const start: State = { slots: [null, null], entries: legacy ? [LEGACY] : [], targets: {}, saves: 0, rejected: false };
       for (const seq of sequences(start, depth)) {
         runs++;
         const result = await run(legacy, seq);
@@ -336,7 +354,7 @@ async function main() {
       }
     }
   }
-  console.log(`PASS H1 H2 H3 H4 F1 F2 F3 B1 X0: ${runs} sequences of 1-${DEPTH} ops from ${ops.length}, 2 start states`);
+  console.log(`PASS H1 H2 H3 H4 F1 F2 F3 T1 B1 X0: ${runs} sequences of 1-${DEPTH} ops from ${ops.length}, 2 start states`);
   console.log(`node ${process.version}, SQLite ${v}, ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 

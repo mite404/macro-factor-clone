@@ -1,18 +1,20 @@
 ---
 name: verifying-nutrition-history
-description: "Runs a bounded exhaustive check that logged diary nutrition, unknown nutrients, and
-  portions survive food edits, archiving, corrections, deletes, reopen, migration, and backup
-  restore, against the real foods/diary/backup/storage code on real SQLite. Use when changing
-  src/features/foods/foods.ts, src/features/diary/diary.ts, src/features/backup/backup.ts, or
-  src/storage/, or when asked whether diary history stays stable."
+description: "Runs a bounded exhaustive check that logged diary nutrition, unknown nutrients,
+  portions, and the current targets survive food edits, archiving, corrections, deletes, target
+  edits, reopen, migration, and backup restore, against the real foods/diary/goals/backup/storage
+  code on real SQLite. Use when changing src/features/foods/foods.ts, src/features/diary/diary.ts,
+  src/features/goals/goals.ts, src/features/backup/backup.ts, or src/storage/, or when asked
+  whether diary history stays stable."
 ---
 
 # Verifying nutrition history
 
 A bounded exhaustive check, not a proof. `scripts/check.ts` enumerates every op sequence the UI
-can reach, up to a depth, from 17 ops and 2 start states. It drives the production functions
+can reach, up to a depth, from 19 ops and 2 start states. It drives the production functions
 against Node's built-in SQLite through `src/storage/testDb.ts`. After every step it compares
-`listEntries`, `searchFoods`, and the archived food rows with a hand-written spec oracle. The oracle
+`listEntries`, `searchFoods`, the archived food rows, and `loadTargets` with a hand-written spec
+oracle. The oracle
 states expected values. It does not reimplement app code. TypeScript has no verifier that runs on
 this code, and the question is what the code does, not whether a design orders events safely. So
 this checks real code with generated inputs, not a model.
@@ -23,12 +25,13 @@ this checks real code with generated inputs, not a model.
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON .agents/skills/verifying-nutrition-history/scripts/check.ts
 ```
 
-The default depth is 4: 8,196 sequences, about 22 s. Before moving the sync commit, also run
-`--depth 5`: 85,388 sequences, about 4 min. Exit 0 prints `PASS`. Exit 1 prints `FAIL <property>`
-with a shortest counterexample as numbered steps and the expected and actual rows.
+The default depth is 4: 17,536 sequences, about 45 s. Before moving the sync commit, also run
+`--depth 5`: 206,492 sequences, about 10.5 min. Exit 0 prints `PASS`. Exit 1 prints
+`FAIL <property>` with a shortest counterexample as numbered steps and the expected and actual
+rows.
 
 To prove the check can still fail, run `scripts/mutants.ts` the same way. It needs a clean `src/`.
-It applies 15 real breakages one at a time and restores each file. Every line must read
+It applies 19 real breakages one at a time and restores each file. Every line must read
 `CAUGHT`. It then confirms the baseline passes and `src/` is clean.
 
 ## Properties
@@ -49,41 +52,51 @@ The harm in every case is a diary that silently changes or misreports what the o
 - **F2 archive-hides-only.** Archived foods never appear in search. Archiving changes nothing else.
 - **F3 archived-food-kept.** An archived food stays stored as last saved, read with SQL, including
   through a backup round trip.
+- **T1 targets-current.** `loadTargets` returns exactly the last-saved target set: blank fields
+  have no target, a later save replaces the whole set, and reopening, migrating, and restoring a
+  backup of the same data keep it. Saving targets never changes a diary entry (H1).
 - **B1 failed-restore-changes-nothing.** A backup whose entry refers to a missing food is rejected
   before any write. A valid restore whose middle insert fails, after its delete, throws that
-  failure and rolls back, so every stored row is unchanged.
+  failure and rolls back, so every stored row, targets included, is unchanged.
 - **X0 no-error.** No op throws. This covers `migrate` on reopen and on a ticket-01 database.
 
 ## Bounds and assumptions
 
 - Ops: save Oats or Juice, edit food 0 to Bar or Oat milk (g → ml), edit food 1 to Rice (ml → g),
   archive either food, five logs (g, ml, and serving, including rejected ones), correct the first
-  entry, delete the first entry, close/reopen/migrate, `restore` (export, `JSON.stringify`,
-  `parseBackup`, `restoreBackup` into a new database file, then use it), and `failedRestores`.
+  entry, delete the first entry, set targets (2000 kcal and 100 g protein), edit targets
+  (calories blank, protein 120 g, fat 62,5 g), close/reopen/migrate, `restore` (export,
+  `JSON.stringify`, `parseBackup`, `restoreBackup` into a new database file, then use it), and
+  `failedRestores`.
   Ops that the UI cannot reach are pruned, such as logging an archived food. `check.ts` keeps the
   op table and form values.
 - Start states: an empty database, and a ticket-01 (`user_version = 1`) database holding one
   quick-add entry with unknown protein and fat.
 - One calendar day. One actor, one write at a time. Numbers compare within 1e-9 relative.
 - Logs pick the food from `searchFoods(db, '')` as `Diary.tsx` does. Corrections go through
-  `parseEntryForm` and then `updateEntry`, as `Diary.tsx` does. Restores go through `parseBackup`
+  `parseEntryForm` and then `updateEntry`, as `Diary.tsx` does. Targets go through `parseTargets`
+  and then `saveTargets`, as `Diary.tsx` does. Restores go through `parseBackup`
   and `restoreBackup`, as `BackupSettings.tsx` does.
 
 ## Not covered
 
-- The UI layer. That means `Diary.tsx`, `LoggingScreens.tsx`, and `BackupSettings.tsx`, their
-  `formOf`/`toText` form round trips, the restore confirmation, and stale component state.
+- The UI layer. That means `Diary.tsx`, `LoggingScreens.tsx`, `TargetsForm.tsx`, and
+  `BackupSettings.tsx`, their `formOf`/`toText`/`targetsView` form round trips, the restore
+  confirmation, and stale component state.
+- `compareTargets`, the over, left, and incomplete wording. `src/features/goals/goals.test.ts`
+  covers it, and the Storybook stories render it.
 - expo-sqlite, expo-file-system, expo-document-picker, and expo-sharing on iOS. Node's SQLite stands
   in for SQLite here, and no file leaves the process.
 - `dayTotals`, `addDays`, `localDay`, multiple days, timezones, search queries other than `''`,
   other quantities and values, and concurrency.
-- Restoring a backup from other data than the database's own, and the other rejection reasons
-  (size, JSON, format, version, values, duplicate ids). `src/features/backup/backup.test.ts`
+- Restoring a backup from other data than the database's own, including version 1 files and the
+  removal of existing targets by a restore, and the other rejection reasons (size, JSON, format,
+  version, values, duplicate ids and targets). `src/features/backup/backup.test.ts`
   covers those.
 
 ## Coverage record
 
-Sync commit: `9342ab7293f1ece11b42381caa7df5ffeab43388`. Tools: Node v26.12.1 with built-in
+Sync commit: `e27a9d28af5efb40319cfe4d223e2a1c9fcdbb04`. Tools: Node v26.12.1 with built-in
 `node:sqlite` (SQLite 3.54.0), running `.ts` files by type stripping. The repo requires
 Node ≥ 22.18.
 
@@ -95,6 +108,7 @@ Node ≥ 22.18.
 | F1, F2           | `foods.ts` `parseFoodForm`, `values`, `insertFood`, `updateFood`, `searchFoods`, `archiveFood` |
 | X0, start states | `storage/migrations.ts` `migrations`, `migrate`; `storage/testDb.ts`      |
 | H1-H3, F1, F3    | `backup.ts` `exportBackup`, `parseBackup`, `restoreBackup` (via `restore`) |
+| T1               | `goals.ts` `parseTargets`, `saveTargets`, `loadTargets`; `backup.ts` targets export and restore |
 | B1               | `backup.ts` `parseBackup` dangling-reference check, `restoreBackup` rollback |
 
 ## When code changes
@@ -102,9 +116,9 @@ Node ≥ 22.18.
 1. Find out whether a change touches covered code:
 
    ```sh
-   git diff --stat 9342ab7293f1ece11b42381caa7df5ffeab43388 -- \
-     src/features/foods/foods.ts src/features/diary/diary.ts src/features/backup/backup.ts \
-     src/storage/
+   git diff --stat e27a9d28af5efb40319cfe4d223e2a1c9fcdbb04 -- \
+     src/features/foods/foods.ts src/features/diary/diary.ts src/features/goals/goals.ts \
+     src/features/backup/backup.ts src/storage/
    ```
 
 2. Run the check. On `FAIL`, read the counterexample steps. If the change was not meant to alter
