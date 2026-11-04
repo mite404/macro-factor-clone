@@ -5,7 +5,7 @@ import App from '../src/App';
 import { restoreBackup, type Backup } from '../src/features/backup/backup';
 import v1Backup from '../src/features/backup/backup-v1.json';
 import v2Backup from '../src/features/backup/backup-v2.json';
-import v3Backup from '../src/features/backup/backup-v3.json';
+import v4Backup from '../src/features/backup/backup-v4.json';
 import { insertEntry, localDay } from '../src/features/diary/diary';
 import { insertFood } from '../src/features/foods/foods';
 import { saveTargets } from '../src/features/goals/goals';
@@ -290,7 +290,7 @@ export const MeasuredServingWithKeyboard: Story = {
 };
 
 export const BackupExport: Story = {
-  args: { onInit: (db) => restoreBackup(db, v3Backup as Backup) },
+  args: { onInit: (db) => restoreBackup(db, v4Backup as Backup) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const downloads: Blob[] = [];
@@ -308,7 +308,7 @@ export const BackupExport: Story = {
     }
     const exported = JSON.parse(await downloads[0].text());
     await expect(Date.parse(exported.exportedAt)).not.toBeNaN();
-    await expect({ ...exported, exportedAt: v3Backup.exportedAt }).toEqual(v3Backup);
+    await expect({ ...exported, exportedAt: v4Backup.exportedAt }).toEqual(v4Backup);
     await expect(canvas.queryByRole('alert')).toBeNull();
   },
 };
@@ -347,7 +347,7 @@ export const BackupRestoreRejectsInvalidFiles: Story = {
     const dangling = { ...v1Backup, diaryEntries: [{ ...v1Backup.diaryEntries[1], foodId: 3 }] };
     const files: [string, string][] = [
       ['{"format": "nutrition-diary-backup",', 'This file is not valid JSON, so it cannot be a backup.'],
-      [JSON.stringify({ ...v3Backup, version: 4 }), 'This backup was made by a newer version of the app (format 4). Update the app to restore it.'],
+      [JSON.stringify({ ...v4Backup, version: 5 }), 'This backup was made by a newer version of the app (format 5). Update the app to restore it.'],
       [JSON.stringify(dangling), 'Diary entry 7 refers to food 3, which is not in the backup.'],
     ];
     for (const [text, reason] of files) {
@@ -825,5 +825,105 @@ export const BarcodeOffLargeText: Story = {
     const license = canvas.getByRole('link', { name: 'Open Database License' });
     license.scrollIntoView({ block: 'end' });
     await waitFor(() => expect(license.getBoundingClientRect().bottom).toBeLessThanOrEqual(save.getBoundingClientRect().top));
+  },
+};
+
+async function seedIngredients(db: Db) {
+  await insertFood(db, { name: 'Chicken', basis: 'g', calories: 120, protein: 20, carbs: 0, fat: 2, serving: null, barcode: null });
+  await insertFood(db, { name: 'Rice', basis: 'g', calories: 150, protein: 2.5, carbs: 33, fat: null, serving: { name: 'cup', amount: 160 }, barcode: null });
+  await insertFood(db, { name: 'Stock', basis: 'ml', calories: 5, protein: 0.5, carbs: 0.3, fat: 0.1, serving: null, barcode: null });
+}
+
+async function addIngredient(canvas: ReturnType<typeof within>, name: string, amount: string, serving?: string) {
+  await userEvent.click(await canvas.findByRole('button', { name: 'Add ingredient' }));
+  await userEvent.click(await canvas.findByRole('button', { name: new RegExp(`^${name},`) }));
+  if (serving) await userEvent.click(canvas.getByRole('radio', { name: new RegExp(`^Servings of ${serving}`) }));
+  await userEvent.type(canvas.getByLabelText(serving ? 'Number of servings' : 'Amount in grams'), amount);
+  await userEvent.click(canvas.getByRole('button', { name: 'Add to recipe' }));
+}
+
+export const RecipeBuildAndLog: Story = {
+  args: { onInit: seedIngredients },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Search for a food' }));
+    await userEvent.click(await canvas.findByRole('tab', { name: 'Recipes' }));
+    await expect(await canvas.findByText(/No recipes yet/)).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'New recipe' }));
+    await userEvent.type(canvas.getByLabelText('Recipe name'), 'Chicken rice');
+    await userEvent.type(canvas.getByLabelText('Finished weight in grams'), '0');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+    await expect(await canvas.findByText('Enter the finished weight above 0 g')).toBeVisible();
+    await expect(canvas.getByText('Add at least one ingredient')).toBeVisible();
+
+    // A per-100 ml food is refused; its density is unknown.
+    await userEvent.click(canvas.getByRole('button', { name: 'Add ingredient' }));
+    await userEvent.click(await canvas.findByRole('button', { name: /^Stock,/ }));
+    await expect(await canvas.findByText(/Stock is measured per 100 ml/)).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Back to recipe' }));
+
+    await addIngredient(canvas, 'Chicken', '250');
+    await addIngredient(canvas, 'Rice', '2.5', 'cup');
+    // The draft survived both trips to the picker.
+    await expect(canvas.getByLabelText('Recipe name')).toHaveValue('Chicken rice');
+    await expect(canvas.getByText('Weight of ingredients is 650 g')).toBeVisible();
+    await expect(canvas.getByText("Rice has no fat value, so this recipe's fat is unknown.")).toBeVisible();
+    await replace(canvas.getByLabelText('Finished weight in grams'), '600');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+
+    await expect(await canvas.findByText('Makes 600 g from 650 g of ingredients')).toBeVisible();
+    await userEvent.type(canvas.getByLabelText('Portion in grams'), '150');
+    await expect(await canvas.findByText('150 g: 225 kcal · P 15 · C 33 · F ? g')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
+    await expect(await canvas.findByRole('button', { name: /^Chicken rice, 150 g, 225 kilocalories, protein 15, carbs 33, fat \? grams/ })).toBeVisible();
+  },
+};
+
+export const RecipeEditKeepsHistory: Story = {
+  args: {
+    onInit: async (db) => {
+      await restoreBackup(db, v4Backup as Backup);
+      await insertEntry(db, { day: localDay(), label: 'Trail oats', calories: 288, protein: 9.284, carbs: null, fat: 8.988 }, { foodId: null, amount: 100, unit: 'g' });
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Search for a food' }));
+    await userEvent.click(await canvas.findByRole('tab', { name: 'Recipes' }));
+    await userEvent.click(await canvas.findByRole('button', { name: /^Trail oats, 288 kilocalories per 100 grams/ }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Edit Recipe' }));
+    await userEvent.click(canvas.getByRole('button', { name: /^Remove NUT 'N BERRY MIX/ }));
+    await replace(canvas.getByLabelText('Finished weight in grams'), '160');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+    await userEvent.type(await canvas.findByLabelText('Portion in grams'), '100');
+    await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
+    await expect(await canvas.findByRole('button', { name: /^Trail oats, 100 g, 288 kilocalories/ })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /^Trail oats, 100 g, 185 kilocalories/ })).toBeVisible();
+  },
+};
+
+export const RecipeManyIngredientsScrolls: Story = {
+  args: {
+    onInit: async (db) => {
+      for (const name of ['Onion', 'Carrot', 'Celery', 'Garlic', 'Lentils', 'Tomato', 'Spinach', 'Olive oil', 'Cumin', 'Lemon']) {
+        await insertFood(db, { name, basis: 'g', calories: 40, protein: 1, carbs: 9, fat: 0.1, serving: null, barcode: null });
+      }
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Search for a food' }));
+    await userEvent.click(await canvas.findByRole('tab', { name: 'Recipes' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'New recipe' }));
+    await userEvent.type(canvas.getByLabelText('Recipe name'), 'Lentil soup');
+    for (const name of ['Onion', 'Carrot', 'Celery', 'Garlic', 'Lentils', 'Tomato', 'Spinach', 'Olive oil', 'Cumin', 'Lemon']) {
+      await addIngredient(canvas, name, '100');
+    }
+    await expect(canvas.getByLabelText('Recipe name')).toHaveValue('Lentil soup');
+    await expect(canvas.getByText('Weight of ingredients is 1000 g')).toBeVisible();
+    const last = canvas.getByRole('button', { name: /^Remove Lemon/ });
+    last.scrollIntoView({ block: 'end' });
+    const save = canvas.getByRole('button', { name: 'Save' });
+    await waitFor(() => expect(last.getBoundingClientRect().bottom).toBeLessThanOrEqual(save.getBoundingClientRect().top));
   },
 };

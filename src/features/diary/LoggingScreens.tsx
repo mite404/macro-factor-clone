@@ -41,7 +41,7 @@ export function daySummary(entries: Nutrition[]): string {
   return `${round(t.calories)} kcal   ${macro(t.protein)} P   ${macro(t.fat)} F   ${macro(t.carbs)} C`;
 }
 
-export type LoggerTab = 'Barcode' | 'Search' | 'Quick Add';
+export type LoggerTab = 'Barcode' | 'Search' | 'Recipes' | 'Quick Add';
 
 /** The logger's sheet header: close, the day's totals, and the ribbon of ways to log. */
 export function LoggerHeader({ active, summary, onClose, onTab }: {
@@ -59,7 +59,7 @@ export function LoggerHeader({ active, summary, onClose, onTab }: {
     <View style={{ width: 40, height: 4, borderRadius: 4, backgroundColor: p.border, alignSelf: 'center', margin: 4 }} />
     {active ? <View accessibilityRole="tablist" style={{ flexDirection: 'row', justifyContent: 'space-around',
       paddingHorizontal: 12, borderBottomWidth: 2, borderColor: p.border }}>
-      {(['Barcode', 'Search', 'Quick Add'] as const).map(name => <Pressable key={name} role="tab" aria-selected={name === active}
+      {(['Barcode', 'Search', 'Recipes', 'Quick Add'] as const).map(name => <Pressable key={name} role="tab" aria-selected={name === active}
         onPress={() => name !== active && onTab?.(name)} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12,
           borderBottomWidth: 2, borderColor: name === active ? p.text : 'transparent' }}>
         <Label size={12}>{name}</Label>
