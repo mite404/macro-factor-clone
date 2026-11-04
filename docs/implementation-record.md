@@ -64,13 +64,31 @@ the results. There are no open prerequisite PRs and no prerequisite CI blocker.
 | 04 | Manual targets | [PR #6][pr6], merged |
 | 05 | USDA lookup | [PR #7][pr7], merged |
 | 06 | Open Food Facts fallback | [PR #8][pr8], merged by worker; oracle corrections pending |
-| 07 | Camera scanning | Queued after 06 |
+| 07 | Camera scanning | Code-verified in this orb, uncommitted; native acceptance pending |
 | 08 | Weighed recipes | Queued after 07 |
 | 09 | Copy diary entries | Queued after 08 |
 | 10 | Weight history | Queued after 09 |
 
 Feature delivery is 4 of 8 merged, but ticket 06 has unresolved oracle findings and ticket 07 is
 held. Last confirmed remote main is [4d2c9ca][main06]. No Mac satellite has been started.
+
+## Ticket 07: camera scanning
+
+[Implementation thread][t07-thread]. The owner started ticket 07 on November 4 while the ticket 06
+oracle corrections were still off main. Those touch `lookup.ts`; this ticket does not.
+
+The Barcode tab's ▥ button opens `expo-camera` 58.0.14 for EAN-13, EAN-8, UPC-A and UPC-E codes.
+Permission is requested on that tap, never at startup. A ref lock accepts one detection per opening;
+the scan closes the camera, fills the field, and runs the existing resolver. ▥ rescans explicitly.
+Leaving the tab or a result unmounts the camera. Backgrounding relies on iOS suspending the capture
+session; no app code handles it. Denial shows Allow camera or Open Settings, with typed entry kept.
+`NSCameraUsageDescription` is set; the microphone description is omitted. No frames are stored.
+
+Observed in this orb: typecheck, lint, 34 Node tests, iOS export, 39 Storybook stories, and the
+depth-4 nutrition-history check passed. A Storybook `expo-camera` stand-in fires each code on every
+render; removing the lock made `BarcodeScanOnceAndRescan` fail. The real web module rendered the
+denied state in headless Chromium. Untested: a real camera, the iOS prompt, background/foreground,
+VoiceOver, and the native build. The physical iPhone 12 Pro gate is pending.
 
 ## Ticket 06 oracle corrections are required after shipping
 
@@ -442,6 +460,7 @@ No merges are authorized by this record. No native build has been verified by th
 [ui-thread]: https://ampcode.com/threads/T-f3543611-9f9b-44f2-8037-090845203361
 [history-thread]: https://ampcode.com/threads/T-01a1a39d-c369-77ac-9a80-b1993d5d057a
 [ci-thread]: https://ampcode.com/threads/T-118f58c0-7f55-46e6-9d1f-83d662f2b3dc
+[t07-thread]: https://ampcode.com/threads/T-4bd49a1c-f754-4a63-8218-563690c638dd
 [off-aggregation]:
   https://github.com/openfoodfacts/openfoodfacts-server/tree/d4e3cd4/lib/ProductOpener
 [off-carbs]:

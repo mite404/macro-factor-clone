@@ -51,6 +51,13 @@ restart, large text and VoiceOver, keyboard layout, and Files export/restore as 
 arrive. Native checks remain pending until someone runs them on Apple tooling or the physical
 device.
 
+Camera scanning adds the `expo-camera` native module, so rerun `npx expo prebuild --platform ios`
+and rebuild; a JavaScript refresh of an older build has no camera. On the iPhone, check: the
+camera prompt appears only on the first tap of the Barcode tab's ▥ button; one scan of a held
+package makes one lookup; Don't Allow shows Open Settings and typed lookup still works; scanning,
+then pressing Home and reopening, resumes the camera only if the scanner was still open; leaving
+the tab turns the camera indicator off; an unknown package reaches Create food.
+
 For backups, check on the iPhone: export and choose Save to Files, then dismiss the share sheet
 without saving; choose a file in Files, then cancel the picker; cancel and confirm a replacement;
 restore a backup after deleting and reinstalling the app. Compare the diary and saved foods with
