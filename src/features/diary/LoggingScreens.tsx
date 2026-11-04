@@ -75,7 +75,7 @@ function FoodRow({ food, onPress }: { food: Food; onPress: () => void }) {
 function SearchBody({ query, foods, onFood }: { query: string; foods: Food[]; onFood: (food: Food) => void }) {
   const p = usePalette();
   const trimmed = query.trim();
-  return <View style={{ padding: 16, backgroundColor: p.surface, minHeight: 540 }}>
+  return <View style={{ padding: 16, backgroundColor: p.surface, flexGrow: 1 }}>
     <Label>{trimmed ? 'Matching saved foods' : 'Saved Foods'}</Label>
     {foods.map(food => <FoodRow key={food.id} food={food} onPress={() => onFood(food)} />)}
     {foods.length === 0 ? <Label muted style={{ paddingVertical: 30 }}>
@@ -274,7 +274,7 @@ export function CreateFood({ editing, form, errors, error, onField, onSave, onBa
   const unitWord = form.basis === 'g' ? 'grams' : 'millilitres';
   return <Phone title={editing ? 'Edit Food' : 'Create Food'} onBack={onBack} backLabel="Cancel"
     footer={<View style={{ padding: 18, backgroundColor: p.surface }}><Button primary onPress={onSave}>Save</Button></View>}>
-    <View style={{ padding: 18, gap: 24, backgroundColor: p.surface, minHeight: 700 }}>
+    <View style={{ padding: 18, gap: 24, backgroundColor: p.surface, flexGrow: 1 }}>
       <Label size={21} weight="600">Build your food</Label>
       {editing ? <Label muted size={12}>Changes apply to future logs. Past diary entries keep their values.</Label> : null}
       <Card style={{ borderWidth: 1, borderColor: p.border }}><Row style={{ gap: 12 }}>

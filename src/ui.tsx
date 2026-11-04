@@ -207,7 +207,7 @@ export function Phone({ children, dark = false, title, onBack, backLabel = 'Back
       <View style={{ width: 44 }} />
     </Row> : null}
     {header}
-    <ScrollView contentContainerStyle={{ paddingBottom: 18 }} style={{ flex: 1 }}
+    <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: framed ? 18 : 0 }} style={{ flex: 1 }}
       keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
       {children}
     </ScrollView>

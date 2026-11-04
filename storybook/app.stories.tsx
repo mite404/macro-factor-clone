@@ -9,7 +9,12 @@ import { insertFood } from '../src/features/foods/foods';
 import type { Db } from '../src/storage/migrations';
 
 // Each story renders the production app on its own fresh in-memory SQLite database (see sqlite.tsx).
-const meta = { title: 'App', component: App } satisfies Meta<typeof App>;
+const meta = {
+  title: 'App',
+  component: App,
+  // The live app fills the screen, as it does on a phone and in the Expo web build.
+  decorators: [(Story) => <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}><Story /></div>],
+} satisfies Meta<typeof App>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
