@@ -178,8 +178,15 @@ const mutants: Mutant[] = [
     property: 'F1 food-record-fidelity',
     why: 'an Open Food Facts gap is filled from another record in the reply',
     file: lookup,
-    from: 'if (!isObject(n) || n.source_index !== energy.source_index) return null;',
-    to: 'if (!isObject(n)) return null;',
+    from: 'if (!isObject(n) || n.source_index !== energy.source_index || n.modifier !== undefined) return null;',
+    to: 'if (!isObject(n) || n.modifier !== undefined) return null;',
+  },
+  {
+    property: 'F1 food-record-fidelity',
+    why: "Open Food Facts' net carbohydrates are saved as total carbs",
+    file: lookup,
+    from: "off: 'carbohydrates-total'",
+    to: "off: 'carbohydrates'",
   },
   {
     property: 'F1 food-record-fidelity',

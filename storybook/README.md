@@ -66,8 +66,8 @@ adds dependencies and needs the owner's approval.
 | `UsdaKeySettings` | Blank and malformed keys rejected, key saved masked and never shown, then removed |
 | `BarcodeLargeText` | At 1.5× text the USDA review keeps every figure whole and scrolls clear of Save food |
 | `BarcodeOffFallbackSaveOffline` | USDA miss falls back to Open Food Facts; review, license link, save, log 20 g, repeat lookup offline |
-| `BarcodeUsdaLimitOffersOff` | USDA 429 asks nothing else; Try Open Food Facts, its 503, then Try again asks only Open Food Facts |
-| `BarcodeOffLargeText` | No key: Open Food Facts directly; unknown protein and fat stay "?"; 1.5× text keeps figures whole |
+| `BarcodeUsdaLimitOffersOff` | USDA 429 asks nothing else; Try Open Food Facts, its 503, then Try again sends nothing during the cooldown |
+| `BarcodeOffLargeText` | No key: Open Food Facts directly; unknown protein, fat, and net-only carbs stay "?"; 1.5× text keeps figures whole |
 | `BarcodeScanOnceAndRescan` | One permission request; three repeated detections make one lookup; an explicit rescan makes one more |
 | `BarcodeScanDeniedTypeUnknown` | Denied camera offers Settings, re-reads access on return; a typed unknown code reaches Create food |
 | `BarcodeScanPromptOpen` | While the iOS prompt is open the scanner waits behind it, with no scan hint and no access-off message |

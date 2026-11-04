@@ -167,7 +167,7 @@ export function ProviderReview({ summary, food, error, onSave, onBack, onClose }
       <Macros values={[`${round(food.calories)}`, value(food.protein), value(food.fat), value(food.carbs)]} />
       <Label size={12} muted>Per 100 {food.basis}: {describe(food)}</Label>
       {unknown.length > 0 ? <Label size={12} style={{ color: p.warning }}>
-        {food.source.name} lists no {unknown.join(' or ')}. It stays unknown in your log, not 0.
+        No usable {unknown.join(' or ')} in the selected nutrition record. It stays unknown in your log, not 0.
       </Label> : null}
       <FoodFacts food={food} published={food.published} saved="Retrieved" />
       {error ? <Label accessibilityRole="alert" size={12} style={{ color: p.danger }}>{error}</Label> : null}
