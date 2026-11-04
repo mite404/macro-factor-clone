@@ -27,6 +27,7 @@ compatibility against network-fetched versions and is not a CI gate.
 - `metro.config.js`: lets expo-sqlite run in the web preview (wasm, COOP/COEP headers).
 - `assets/`: official template placeholders, not final product branding.
 - [Implementation plan](docs/implementation-plan.md): ten post-scaffold PR-sized units.
+- [Implementation record](docs/implementation-record.md): delivery and verification source of truth.
 - [Tickets](docs/tickets/): each unit's scope, checks, and mobile learning notes.
 - [Research](docs/nutrition-app-research.md): sources, alternatives, and constraints.
 - [Architecture decisions](docs/adr/adr.md): why mobile development differs from web development.
