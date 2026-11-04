@@ -1048,3 +1048,20 @@ export const WeightLongHistoryLargeText: Story = {
     await waitFor(() => expect(last.getBoundingClientRect().bottom).toBeLessThanOrEqual(footer.getBoundingClientRect().top));
   },
 };
+
+export const WeightUnitSaveFails: Story = {
+  args: {
+    onInit: async (db) => {
+      await insertWeight(db, { day: localDay(), kg: 80 });
+      await db.execAsync("CREATE TRIGGER fail_unit BEFORE INSERT ON preferences BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END;");
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await openWeight(canvas);
+    await userEvent.click(canvas.getByRole('radio', { name: 'Pounds' }));
+    await expect(await canvas.findByRole('alert')).toHaveTextContent('Could not change the unit. Try again.');
+    await expect(canvas.getByRole('radio', { name: 'Kilograms' })).toHaveAttribute('aria-checked', 'true');
+    await expect(canvas.getByText('avg 80 kg · 1 weigh-in')).toBeVisible();
+  },
+};

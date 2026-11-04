@@ -75,8 +75,8 @@ function WeightChart({ weights, points, unit }: { weights: Weight[]; points: Tre
   </View>;
 }
 
-function HistoryBody({ weights, unit, onUnit, onWeight }: {
-  weights: Weight[]; unit: WeightUnit; onUnit: (unit: WeightUnit) => void; onWeight: (w: Weight) => void;
+function HistoryBody({ weights, unit, saveError, onUnit, onWeight }: {
+  weights: Weight[]; saveError: string; unit: WeightUnit; onUnit: (unit: WeightUnit) => void; onWeight: (w: Weight) => void;
 }) {
   const p = usePalette();
   const points = trend(weights);
@@ -98,6 +98,7 @@ function HistoryBody({ weights, unit, onUnit, onWeight }: {
         <Label muted>Log a weigh-in to start your history. A {WINDOW_DAYS}-day average appears with your first one.</Label>
       </View>}
       <Segments label="Weight unit" values={UNITS} names={UNIT_NAMES} selected={unit} onChange={(u) => onUnit(u as WeightUnit)} />
+      {saveError ? <Label accessibilityRole="alert" size={12} style={{ color: p.danger, textAlign: 'center' }}>{saveError}</Label> : null}
     </View>
     <View style={{ padding: 16, gap: 18 }}>
       <Card style={{ gap: 8 }}>
@@ -213,6 +214,7 @@ export default function WeightHistory({ onClose }: { onClose: () => void }) {
     try {
       await saveWeightUnit(db, next);
       setUnit(next);
+      setSaveError('');
       setScreen((s) => (s.kind === 'form' ? { ...s, form: convertForm(s.form, unit, next) } : s));
     } catch {
       setSaveError('Could not change the unit. Try again.');
@@ -244,7 +246,7 @@ export default function WeightHistory({ onClose }: { onClose: () => void }) {
         Log weigh-in
       </Button>
     </View>}>
-    <HistoryBody weights={weights} unit={unit} onUnit={changeUnit}
+    <HistoryBody weights={weights} unit={unit} saveError={saveError} onUnit={changeUnit}
       onWeight={(w) => go({ kind: 'form', day: w.day, form: { text: weightNumber(w.kg, unit), kg: w.kg }, editing: true })} />
   </Phone>;
 }

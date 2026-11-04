@@ -36,7 +36,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 48 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 49 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -84,6 +84,7 @@ adds dependencies and needs the owner's approval.
 | `WeightTrendAddEditDelete` | 80 and 82 kg six days apart average 81; a day-8 84 kg averages 83; edit to 86, then delete |
 | `WeightReplaceAndPounds` | A second weigh-in today warns and replaces; 100 lb shows as 45.4 kg; an earlier day adds |
 | `WeightLongHistoryLargeText` | 53 weigh-ins with gaps: 30-day chart of 20, every row listed, 1.5× text unclipped above Log weigh-in |
+| `WeightUnitSaveFails` | A failed unit save on the history screen shows an alert and keeps kg |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
 
 `main.ts` also aliases `expo-camera` to `camera.tsx`. Its permission answers follow iOS, and its
