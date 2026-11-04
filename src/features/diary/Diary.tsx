@@ -1,6 +1,7 @@
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import BackupSettings from '../backup/BackupSettings';
 import {
   archiveFood, insertFood, logPortion, parseFoodForm, searchFoods, updateFood,
   type Food, type FoodForm, type FoodFormErrors,
@@ -17,7 +18,8 @@ type View =
   | { kind: 'entry'; id: number | null; form: EntryForm; portion: Entry['portion'] }
   | { kind: 'search' }
   | { kind: 'food'; food: Food; quantity: string; unit: Unit | 'serving' }
-  | { kind: 'edit'; id: number | null; form: FoodForm; from: Food | null };
+  | { kind: 'edit'; id: number | null; form: FoodForm; from: Food | null }
+  | { kind: 'settings' };
 
 const blankEntry: View = { kind: 'entry', id: null, form: { label: '', calories: '', protein: '', carbs: '', fat: '' }, portion: null };
 const toText = (n: number | null) => (n === null ? '' : String(n));
@@ -152,6 +154,14 @@ export default function Diary() {
       })} />;
   }
 
+  if (view.kind === 'settings') {
+    // A restore may have replaced every entry, so the log reloads on the way back.
+    return <BackupSettings onClose={() => {
+      close();
+      reload();
+    }} />;
+  }
+
   return <FoodLog day={day} entries={entries} onDay={setDay} onEntry={e => go(entryView(e))}
-    onSearch={() => go({ kind: 'search' })} onQuickAdd={() => go(blankEntry)} />;
+    onSearch={() => go({ kind: 'search' })} onQuickAdd={() => go(blankEntry)} onSettings={() => go({ kind: 'settings' })} />;
 }

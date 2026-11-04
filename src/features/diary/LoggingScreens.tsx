@@ -116,8 +116,8 @@ function Chevron({ children, label, onPress }: { children: string; label: string
   </Pressable>;
 }
 
-function TimelineBody({ day, entries, onDay, onEntry }: {
-  day: string; entries: Entry[]; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
+function TimelineBody({ day, entries, onDay, onEntry, onSettings }: {
+  day: string; entries: Entry[]; onDay: (day: string) => void; onEntry: (entry: Entry) => void; onSettings: () => void;
 }) {
   const p = usePalette();
   const totals = dayTotals(entries);
@@ -130,12 +130,17 @@ function TimelineBody({ day, entries, onDay, onEntry }: {
     formatMacro(t, entries.length).replace(' g', '').replace('unknown', '?'))];
   const spoken = [totals.protein, totals.fat, totals.carbs].map(t => formatMacro(t, entries.length).replace('≥', 'at least '));
   return <View style={{ padding: 16, gap: 18 }}>
-    <Row style={{ justifyContent: 'center', gap: 24 }}>
-      <Chevron label="Previous day" onPress={() => onDay(addDays(day, -1))}>‹</Chevron>
-      <Label accessibilityRole="header" style={{ minWidth: 120, textAlign: 'center' }}>
-        {day === today ? 'Today' : formatDay(day, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-      </Label>
-      <Chevron label="Next day" onPress={() => onDay(addDays(day, 1))}>›</Chevron>
+    <Row style={{ justifyContent: 'space-between' }}>
+      {/* Balances the settings button so the date stays centred. */}
+      <View style={{ width: 44 }} />
+      <Row style={{ gap: 24 }}>
+        <Chevron label="Previous day" onPress={() => onDay(addDays(day, -1))}>‹</Chevron>
+        <Label accessibilityRole="header" style={{ minWidth: 120, textAlign: 'center' }}>
+          {day === today ? 'Today' : formatDay(day, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+        </Label>
+        <Chevron label="Next day" onPress={() => onDay(addDays(day, 1))}>›</Chevron>
+      </Row>
+      <Chevron label="Settings" onPress={onSettings}>⚙︎</Chevron>
     </Row>
     <Row style={{ justifyContent: 'space-between' }}>{week.map((date, i) =>
       <Pressable key={date} accessibilityRole="button" aria-selected={date === day}
@@ -174,12 +179,12 @@ function LogFooter({ onSearch, onQuickAdd }: { onSearch: () => void; onQuickAdd:
 }
 
 /** The day's food log: day picker, macro totals, and entries; search opens the logger. */
-export function FoodLog({ day, entries, onDay, onEntry, onSearch, onQuickAdd }: {
+export function FoodLog({ day, entries, onDay, onEntry, onSearch, onQuickAdd, onSettings }: {
   day: string; entries: Entry[]; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
-  onSearch: () => void; onQuickAdd: () => void;
+  onSearch: () => void; onQuickAdd: () => void; onSettings: () => void;
 }) {
   return <Phone dark footer={<LogFooter onSearch={onSearch} onQuickAdd={onQuickAdd} />}>
-    <TimelineBody day={day} entries={entries} onDay={onDay} onEntry={onEntry} />
+    <TimelineBody day={day} entries={entries} onDay={onDay} onEntry={onEntry} onSettings={onSettings} />
   </Phone>;
 }
 
