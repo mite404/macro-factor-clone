@@ -100,7 +100,7 @@ const USDA_REPLY = {
   ],
 };
 // An Open Food Facts import after a lookup with no USDA key. Its protein comes from another
-// record in the reply, so it must stay unknown rather than be merged in.
+// record in the reply, so it must stay unknown rather than be merged in; carbs are its total, not net.
 const NUTELLA: Template = {
   form: { ...blank, name: 'Nutella', basis: 'g', calories: '539', carbs: '57.5', fat: '30.9', servingName: 'serving', servingAmount: '15', barcode: '03017620422003' },
   per100: { calories: 539, protein: null, carbs: 57.5, fat: 30.9 },
@@ -117,7 +117,9 @@ const OFF_REPLY = {
         per: '100g', preparation: 'as_sold',
         nutrients: {
           'energy-kcal': { source: 'manufacturer', source_index: 0, unit: 'kcal', value: 539 },
-          carbohydrates: { source: 'manufacturer', source_index: 0, unit: 'g', value: 57.5 },
+          // Net carbs, fiber excluded; carbs are the total.
+          carbohydrates: { source: 'manufacturer', source_index: 0, unit: 'g', value: 52 },
+          'carbohydrates-total': { source: 'manufacturer', source_index: 0, unit: 'g', value: 57.5 },
           fat: { source: 'manufacturer', source_index: 0, unit: 'g', value: 30.9 },
           proteins: { source: 'packaging', source_index: 2, unit: 'g', value: 30 },
         },
