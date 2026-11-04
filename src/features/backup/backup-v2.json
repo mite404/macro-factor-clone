@@ -1,0 +1,87 @@
+{
+  "format": "nutrition-diary-backup",
+  "version": 2,
+  "exportedAt": "2026-11-04T15:30:00.000Z",
+  "foods": [
+    {
+      "id": 1,
+      "name": "Oats",
+      "basis": "g",
+      "calories": 379,
+      "protein": 13.2,
+      "carbs": null,
+      "fat": 0,
+      "servingName": "cup",
+      "servingAmount": 40,
+      "barcode": "0070",
+      "sourceId": null,
+      "sourceName": null,
+      "retrievedOn": null,
+      "archived": false
+    },
+    {
+      "id": 4,
+      "name": "Orange juice",
+      "basis": "ml",
+      "calories": 45,
+      "protein": null,
+      "carbs": 10.4,
+      "fat": null,
+      "servingName": null,
+      "servingAmount": null,
+      "barcode": null,
+      "sourceId": "fdc:2345",
+      "sourceName": "USDA FoodData Central",
+      "retrievedOn": "2026-10-20",
+      "archived": true
+    }
+  ],
+  "diaryEntries": [
+    {
+      "id": 2,
+      "day": "2026-10-30",
+      "label": "Quick add",
+      "calories": 250,
+      "protein": 0,
+      "carbs": null,
+      "fat": null,
+      "foodId": null,
+      "amount": null,
+      "unit": null
+    },
+    {
+      "id": 7,
+      "day": "2026-10-31",
+      "label": "Oats",
+      "calories": 568.5,
+      "protein": 19.8,
+      "carbs": null,
+      "fat": 0,
+      "foodId": 1,
+      "amount": 150,
+      "unit": "g"
+    },
+    {
+      "id": 9,
+      "day": "2026-10-31",
+      "label": "Orange juice",
+      "calories": 148.5,
+      "protein": null,
+      "carbs": 34.32,
+      "fat": null,
+      "foodId": 4,
+      "amount": 330,
+      "unit": "ml"
+    }
+  ],
+  "targets": [
+    {
+      "nutrient": "calories",
+      "amount": 2000
+    },
+    {
+      "nutrient": "protein",
+      "amount": 100
+    }
+  ]
+}

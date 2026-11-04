@@ -1,6 +1,7 @@
 // The backup file format. docs/backup-format.md documents it and how later versions extend it.
 import type { Db } from '../../storage/migrations';
 import { addDays, type Unit } from '../diary/diary.ts';
+import { NUTRIENTS, type Nutrient } from '../goals/goals.ts';
 
 // Rows mirror the SQLite tables column for column: ids, explicit days, units, and null = unknown.
 export type BackupFood = {
@@ -31,12 +32,15 @@ export type BackupEntry = {
   amount: number | null;
   unit: Unit | null;
 };
+export type BackupTarget = { nutrient: Nutrient; amount: number };
+// parseBackup upgrades earlier versions to this shape, so restore handles only the current one.
 export type Backup = {
   format: typeof BACKUP_FORMAT;
   version: typeof BACKUP_VERSION;
   exportedAt: string;
   foods: BackupFood[];
   diaryEntries: BackupEntry[];
+  targets: BackupTarget[];
 };
 export type BackupSummary = {
   foods: number;
@@ -45,10 +49,11 @@ export type BackupSummary = {
   days: number;
   firstDay: string | null;
   lastDay: string | null;
+  targets: number;
 };
 
 export const BACKUP_FORMAT = 'nutrition-diary-backup';
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 /** Larger files are refused before they are read. Years of daily logging stay far below this. */
 export const MAX_BACKUP_BYTES = 20 * 1024 * 1024;
 export const TOO_LARGE = 'This file is larger than 20 MB, too large for a backup.';
@@ -75,7 +80,11 @@ const entryFields: Record<keyof BackupEntry, Check> = {
   id, day, label: text, calories: amount, protein: orNull(amount), carbs: orNull(amount), fat: orNull(amount),
   foodId: orNull(id), amount: orNull(positive), unit: orNull(unit),
 };
-const topFields = ['format', 'version', 'exportedAt', 'foods', 'diaryEntries'];
+const targetFields: Record<keyof BackupTarget, Check> = {
+  nutrient: (v) => NUTRIENTS.some(([key]) => key === v), amount: positive,
+};
+// Collections each version holds. Version 1 predates targets.
+const collections = (version: number) => ['foods', 'diaryEntries', ...(version >= 2 ? ['targets'] : [])];
 
 const foodColumns = `id, name, basis, calories, protein, carbs, fat, serving_name AS servingName,
   serving_amount AS servingAmount, barcode, source_id AS sourceId, source_name AS sourceName,
@@ -83,18 +92,18 @@ const foodColumns = `id, name, basis, calories, protein, carbs, fat, serving_nam
 const entryColumns = 'id, day, label, calories, protein, carbs, fat, food_id AS foodId, amount, unit';
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-// The first problem in one collection's records, or null when every record is valid.
-function recordError(name: string, records: unknown[], fields: Record<string, Check>): string | null {
+// The first problem in one collection's records, or null when every record is valid. `key` is unique.
+function recordError(name: string, records: unknown[], fields: Record<string, Check>, key = 'id'): string | null {
   const seen = new Set<unknown>();
   for (const [index, record] of records.entries()) {
     if (!isObject(record)) return `${name} #${index + 1} is not a record`;
-    const which = id(record.id) ? `${name} ${record.id}` : `${name} #${index + 1}`;
+    const which = fields[key](record[key]) ? `${name} ${record[key]}` : `${name} #${index + 1}`;
     const extra = Object.keys(record).find((key) => !Object.hasOwn(fields, key));
     if (extra !== undefined) return `${which} has an unexpected field "${extra}"`;
     const invalid = Object.keys(fields).find((key) => !fields[key](record[key]));
     if (invalid !== undefined) return `${which} has an invalid value for ${invalid}`;
-    if (seen.has(record.id)) return `${which} appears more than once`;
-    seen.add(record.id);
+    if (seen.has(record[key])) return `${which} appears more than once`;
+    seen.add(record[key]);
   }
   return null;
 }
@@ -106,13 +115,15 @@ function backupError(raw: unknown): string | null {
   if ((raw.version as number) > BACKUP_VERSION) {
     return `This backup was made by a newer version of the app (format ${raw.version}). Update the app to restore it.`;
   }
-  const extra = Object.keys(raw).find((key) => !topFields.includes(key));
+  const expected = ['format', 'version', 'exportedAt', ...collections(raw.version as number)];
+  const extra = Object.keys(raw).find((key) => !expected.includes(key));
   if (extra !== undefined) return `The backup has an unexpected field "${extra}".`;
   if (!text(raw.exportedAt)) return 'The backup has no export date.';
-  for (const key of ['foods', 'diaryEntries']) if (!Array.isArray(raw[key])) return `The backup's ${key} is missing.`;
+  for (const key of collections(raw.version as number)) if (!Array.isArray(raw[key])) return `The backup's ${key} is missing.`;
   const foods = raw.foods as BackupFood[];
   const entries = raw.diaryEntries as BackupEntry[];
-  const problem = recordError('Food', foods, foodFields) ?? recordError('Diary entry', entries, entryFields);
+  const problem = recordError('Food', foods, foodFields) ?? recordError('Diary entry', entries, entryFields)
+    ?? recordError('Target', (raw.targets ?? []) as unknown[], targetFields, 'nutrient');
   if (problem) return `${problem}.`;
   const badFood = foods.find((f) => (f.servingName === null) !== (f.servingAmount === null));
   if (badFood) return `Food ${badFood.id} has a serving name without an amount, or an amount without a name.`;
@@ -133,18 +144,21 @@ export async function exportBackup(db: Db, now = new Date()): Promise<Backup> {
     `SELECT ${foodColumns} FROM foods ORDER BY id`, [],
   ); // → rows with archived as 0 | 1
   const diaryEntries = await db.getAllAsync<BackupEntry>(`SELECT ${entryColumns} FROM diary_entries ORDER BY id`, []);
+  const targets = await db.getAllAsync<BackupTarget>('SELECT nutrient, amount FROM targets ORDER BY nutrient', []);
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt: now.toISOString(),
     foods: foods.map((f) => ({ ...f, archived: f.archived === 1 })), // → BackupFood[]
     diaryEntries,
+    targets,
   };
 }
 
 /**
  * Validates a whole backup file before anything is written. Rejects oversized and malformed files,
  * newer formats, invalid values, duplicate ids, and diary entries that refer to missing foods.
+ * An earlier version is upgraded: collections it could not hold become empty.
  */
 export function parseBackup(json: string): { backup: Backup } | { error: string } {
   if (json.length > MAX_BACKUP_BYTES) return { error: TOO_LARGE };
@@ -155,7 +169,9 @@ export function parseBackup(json: string): { backup: Backup } | { error: string 
     return { error: 'This file is not valid JSON, so it cannot be a backup.' };
   }
   const error = backupError(raw);
-  return error ? { error } : { backup: raw as Backup };
+  if (error) return { error };
+  const valid = raw as Omit<Backup, 'version' | 'targets'> & { targets?: BackupTarget[] };
+  return { backup: { ...valid, version: BACKUP_VERSION, targets: valid.targets ?? [] } };
 }
 
 /** Counts what a backup holds, for the confirmation before it replaces anything. */
@@ -168,17 +184,18 @@ export function summarize(backup: Backup): BackupSummary {
     days: days.length,
     firstDay: days[0] ?? null,
     lastDay: days.at(-1) ?? null,
+    targets: backup.targets.length,
   };
 }
 
 /**
- * Replaces all foods and diary entries with the backup's, in one transaction.
+ * Replaces all foods, diary entries, and targets with the backup's, in one transaction.
  * @throws If any write fails. The transaction rolls back, so the existing data stays.
  */
 export async function restoreBackup(db: Db, backup: Backup): Promise<void> {
   await db.execAsync('BEGIN');
   try {
-    await db.execAsync('DELETE FROM diary_entries; DELETE FROM foods;');
+    await db.execAsync('DELETE FROM diary_entries; DELETE FROM foods; DELETE FROM targets;');
     for (const f of backup.foods) {
       await db.runAsync(
         `INSERT INTO foods (id, name, basis, calories, protein, carbs, fat, serving_name, serving_amount, barcode,
@@ -193,6 +210,9 @@ export async function restoreBackup(db: Db, backup: Backup): Promise<void> {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [e.id, e.day, e.label, e.calories, e.protein, e.carbs, e.fat, e.foodId, e.amount, e.unit],
       );
+    }
+    for (const t of backup.targets) {
+      await db.runAsync('INSERT INTO targets (nutrient, amount) VALUES (?, ?)', [t.nutrient, t.amount]);
     }
     await db.execAsync('COMMIT');
   } catch (error) {

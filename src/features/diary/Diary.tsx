@@ -6,9 +6,11 @@ import {
   archiveFood, insertFood, logPortion, parseFoodForm, searchFoods, updateFood,
   type Food, type FoodForm, type FoodFormErrors,
 } from '../foods/foods';
+import { loadTargets, parseTargets, saveTargets, type TargetErrors, type Targets } from '../goals/goals';
+import { TargetsForm } from '../goals/TargetsForm';
 import {
   deleteEntry, insertEntry, listEntries, localDay, parseAmount, parseEntryForm, updateEntry,
-  type Entry, type EntryForm, type FormErrors, type Unit,
+  type Entry, type EntryForm, type FormErrors, type NutritionForm, type Unit,
 } from './diary';
 import { CreateFood, daySummary, FoodDetail, FoodLog, FoodSearch, QuickAdd } from './LoggingScreens';
 
@@ -19,7 +21,8 @@ type View =
   | { kind: 'search' }
   | { kind: 'food'; food: Food; quantity: string; unit: Unit | 'serving' }
   | { kind: 'edit'; id: number | null; form: FoodForm; from: Food | null }
-  | { kind: 'settings' };
+  | { kind: 'settings' }
+  | { kind: 'targets'; form: NutritionForm };
 
 const blankEntry: View = { kind: 'entry', id: null, form: { label: '', calories: '', protein: '', carbs: '', fat: '' }, portion: null };
 const toText = (n: number | null) => (n === null ? '' : String(n));
@@ -31,6 +34,9 @@ const formOf = (f: Food): FoodForm => ({
   name: f.name, basis: f.basis, calories: String(f.calories), protein: toText(f.protein), carbs: toText(f.carbs),
   fat: toText(f.fat), servingName: f.serving?.name ?? '', servingAmount: toText(f.serving?.amount ?? null), barcode: f.barcode ?? '',
 });
+const targetsView = (t: Targets): View => ({
+  kind: 'targets', form: { calories: toText(t.calories ?? null), protein: toText(t.protein ?? null), carbs: toText(t.carbs ?? null), fat: toText(t.fat ?? null) },
+});
 const entryView = (e: Entry): View => ({
   kind: 'entry', id: e.id, portion: e.portion,
   form: { label: e.label, calories: String(e.calories), protein: toText(e.protein), carbs: toText(e.carbs), fat: toText(e.fat) },
@@ -41,15 +47,19 @@ export default function Diary() {
   const db = useSQLiteContext();
   const [day, setDay] = useState(() => localDay());
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [targets, setTargets] = useState<Targets>({});
   const [view, setView] = useState<View>({ kind: 'log' });
   const [query, setQuery] = useState('');
   const [foods, setFoods] = useState<Food[]>([]);
-  const [errors, setErrors] = useState<FormErrors & FoodFormErrors>({});
+  const [errors, setErrors] = useState<FormErrors & FoodFormErrors & TargetErrors>({});
   const [error, setError] = useState('');
   // Synchronous lock: a second tap can land before React re-renders after the first.
   const writing = useRef(false);
 
-  const reload = useCallback(async () => setEntries(await listEntries(db, day)), [db, day]);
+  const reload = useCallback(async () => {
+    setEntries(await listEntries(db, day));
+    setTargets(await loadTargets(db));
+  }, [db, day]);
   useEffect(() => {
     reload();
   }, [reload]);
@@ -154,6 +164,23 @@ export default function Diary() {
       })} />;
   }
 
+  if (view.kind === 'targets') {
+    const { form } = view;
+    return <TargetsForm form={form} errors={errors} error={error} onBack={close}
+      onField={(key, text) => {
+        setErrors(({ [key]: _, ...rest }) => rest);
+        setView({ ...view, form: { ...form, [key]: text } });
+      }}
+      onSave={() => {
+        const result = parseTargets(form);
+        if ('errors' in result) return setErrors(result.errors);
+        write(async () => {
+          await saveTargets(db, result.targets);
+          return { kind: 'log' };
+        });
+      }} />;
+  }
+
   if (view.kind === 'settings') {
     // A restore may have replaced every entry, so the log reloads on the way back.
     return <BackupSettings onClose={() => {
@@ -162,6 +189,7 @@ export default function Diary() {
     }} />;
   }
 
-  return <FoodLog day={day} entries={entries} onDay={setDay} onEntry={e => go(entryView(e))}
-    onSearch={() => go({ kind: 'search' })} onQuickAdd={() => go(blankEntry)} onSettings={() => go({ kind: 'settings' })} />;
+  return <FoodLog day={day} entries={entries} targets={targets} onDay={setDay} onEntry={e => go(entryView(e))}
+    onSearch={() => go({ kind: 'search' })} onQuickAdd={() => go(blankEntry)} onSettings={() => go({ kind: 'settings' })}
+    onTargets={() => go(targetsView(targets))} />;
 }

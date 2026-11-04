@@ -16,6 +16,7 @@ const foods = 'src/features/foods/foods.ts';
 const diary = 'src/features/diary/diary.ts';
 const storage = 'src/storage/migrations.ts';
 const backup = 'src/features/backup/backup.ts';
+const goals = 'src/features/goals/goals.ts';
 
 const mutants: Mutant[] = [
   {
@@ -115,6 +116,34 @@ const mutants: Mutant[] = [
     file: backup,
     from: "    await db.execAsync('ROLLBACK');",
     to: "    await db.execAsync('COMMIT');",
+  },
+  {
+    property: 'H1 history-snapshot',
+    why: 'saving targets clears the diary',
+    file: goals,
+    from: "await db.execAsync('DELETE FROM targets');",
+    to: "await db.execAsync('DELETE FROM targets; DELETE FROM diary_entries;');",
+  },
+  {
+    property: 'T1 targets-current',
+    why: 'the targets form drops the carbs and fat fields',
+    file: goals,
+    from: 'for (const [key] of NUTRIENTS) {',
+    to: 'for (const [key] of NUTRIENTS.slice(0, 2)) {',
+  },
+  {
+    property: 'T1 targets-current',
+    why: 'restore skips the first target',
+    file: backup,
+    from: 'for (const t of backup.targets) {',
+    to: 'for (const t of backup.targets.slice(1)) {',
+  },
+  {
+    property: 'T1 targets-current',
+    why: 'a backup leaves out targets',
+    file: backup,
+    from: "'SELECT nutrient, amount FROM targets ORDER BY nutrient'",
+    to: "'SELECT nutrient, amount FROM targets WHERE 0'",
   },
   {
     property: 'X0 no-error',

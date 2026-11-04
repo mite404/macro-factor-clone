@@ -39,6 +39,11 @@ export const migrations = [
   ALTER TABLE diary_entries ADD COLUMN amount REAL CHECK (amount > 0);
   ALTER TABLE diary_entries ADD COLUMN unit TEXT
     CHECK (unit IN ('g', 'ml') AND (amount IS NULL) = (unit IS NULL));`,
+  // The one current target set. A nutrient without a target has no row.
+  `CREATE TABLE targets (
+    nutrient TEXT PRIMARY KEY CHECK (nutrient IN ('calories', 'protein', 'carbs', 'fat')),
+    amount REAL NOT NULL CHECK (amount > 0)
+  );`,
 ];
 
 /**

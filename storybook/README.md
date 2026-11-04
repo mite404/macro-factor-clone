@@ -3,7 +3,8 @@
 The MacroFactor reference screens are the app's UI. Their component kit moved from
 `storybook/ui.tsx` to `src/ui.tsx`. `FoodLog`, `FoodSearch`, `QuickAdd`, `FoodDetail`, and
 `CreateFood` moved to `src/features/diary/LoggingScreens.tsx`, where fixtures became props and
-disabled buttons became callbacks. `src/features/diary/Diary.tsx` wires them to SQLite. The
+disabled buttons became callbacks. `src/features/goals/TargetsForm.tsx` follows `CreateFood`'s
+layout. `src/features/diary/Diary.tsx` wires them to SQLite. The
 `App` stories render that production app.
 
 The other 11 references are under **Design references**. They show features that are not built
@@ -28,7 +29,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 21 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 26 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -40,14 +41,19 @@ adds dependencies and needs the owner's approval.
 
 | Story | Flow it checks |
 | --- | --- |
-| `EmptyDiary` | Empty day and zero totals |
+| `EmptyDiary` | Empty day, zero totals, and no targets or invented goal |
+| `TargetsUnderAndIncomplete` | Amounts left, unknown protein marked incomplete, carbs without a target |
+| `TargetsOver` | 2150 kcal against 2000 kcal reads 150 kcal over |
+| `TargetsLargeText` | At 1.5× text every total stays whole on one line; the last entry scrolls above the footer |
+| `SetTargetsWithKeyboard` | Typed and tabbed targets, 0 rejected, edits change the comparison, not the entry |
 | `PopulatedDiary` | Seeded entries, a lower-bound protein total, incomplete-macro warning |
 | `QuickAddValidationAndCorrection` | Required and invalid calories, save, correct, delete |
 | `SavedFoodCreateAndLog` | Empty search, create from the search text, validation, 150 g portion |
 | `SavedFoodEditKeepsHistory` | Edit food calories; the earlier diary snapshot stays 184.5 kcal |
 | `MeasuredServingWithKeyboard` | Per-100 ml food, Space selects the serving radio, 2 bottles = 660 ml |
-| `BackupExport` | The downloaded backup equals the restored version 1 fixture, archived food included |
+| `BackupExport` | The downloaded backup equals the restored version 2 fixture, archived food and targets included |
 | `BackupRestoreConfirmation` | Counts and warning, Cancel keeps data, Replace all data replaces it |
+| `BackupRestoresTargets` | A version 2 file's targets are counted, restored, and compared |
 | `BackupRestoreRejectsInvalidFiles` | Malformed, newer-format, and dangling-food files leave data unchanged |
 | `BackupRestoreInProgressLocksNavigation` | Held restore writes: spinner, Cancel and back disabled, then restored |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
