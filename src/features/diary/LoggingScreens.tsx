@@ -1,19 +1,23 @@
 // Moved from storybook/LoggingScreens.tsx and storybook/ProgramScreens.tsx (CreateFood).
 // Fixtures became props and disabled reference buttons became callbacks. Removed for the live app:
 // the illustrated keypad, the hour column (entries carry no time), and tabs or buttons for
-// features that do not exist yet (Scan, AI, Library, Plate, Favorite, Impact on Targets).
+// features that do not exist yet (camera Scan, AI, Library, Plate, Favorite, Impact on Targets). The
+// Barcode tab stands where the original's Scan tab is, for typed codes until the camera lands.
 import { Pressable, TextInput, View } from 'react-native';
 
 import { Button, Card, Field, Label, Macros, palettes, Phone, Row, SearchBar, Segments, usePalette } from '../../ui';
-import type { Food, FoodForm, FoodFormErrors } from '../foods/foods';
+import type { Food, FoodForm, FoodFormErrors, FoodInput, Provenance } from '../foods/foods';
 import { compareTargets, NUTRIENTS, type TargetRow, type Targets } from '../goals/goals';
 import { addDays, dayTotals, localDay, parseAmount, type Entry, type EntryForm, type FormErrors, type MacroTotal, type Nutrition, type Portion, type Unit } from './diary';
 
-const round = (n: number) => Math.round(n * 10) / 10;
+/** One decimal place, as every nutrition figure in the logger shows. */
+export const round = (n: number) => Math.round(n * 10) / 10;
 const grams = (n: number | null) => (n === null ? '?' : `${round(n)}`);
 const macroLine = (n: Nutrition) => `${round(n.calories)} kcal  ${grams(n.protein)} P  ${grams(n.fat)} F  ${grams(n.carbs)} C`;
-const describe = (n: Nutrition) => `${round(n.calories)} kcal · P ${grams(n.protein)} · C ${grams(n.carbs)} · F ${grams(n.fat)} g`;
-const servingText = (f: Food) => (f.serving ? `${f.serving.name} (${round(f.serving.amount)} ${f.basis})` : '');
+/** "500 kcal · P 14.3 · C 42.9 · F 32.1 g", with "?" for an unknown macro. */
+export const describe = (n: Nutrition) => `${round(n.calories)} kcal · P ${grams(n.protein)} · C ${grams(n.carbs)} · F ${grams(n.fat)} g`;
+/** "cup (40 g)" for a food's serving, or '' without one. */
+export const servingText = (f: FoodInput) => (f.serving ? `${f.serving.name} (${round(f.serving.amount)} ${f.basis})` : '');
 const portionText = (p: Portion | null) => (p ? `${round(p.amount)} ${p.unit}` : '');
 const weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -35,8 +39,11 @@ export function daySummary(entries: Nutrition[]): string {
   return `${round(t.calories)} kcal   ${macro(t.protein)} P   ${macro(t.fat)} F   ${macro(t.carbs)} C`;
 }
 
-function LoggerHeader({ active, summary, onClose, onTab }: {
-  active?: 'Search' | 'Quick Add'; summary: string; onClose: () => void; onTab?: (tab: 'Search' | 'Quick Add') => void;
+export type LoggerTab = 'Barcode' | 'Search' | 'Quick Add';
+
+/** The logger's sheet header: close, the day's totals, and the ribbon of ways to log. */
+export function LoggerHeader({ active, summary, onClose, onTab }: {
+  active?: LoggerTab; summary: string; onClose: () => void; onTab?: (tab: LoggerTab) => void;
 }) {
   const p = usePalette();
   return <View style={{ backgroundColor: p.surface }}>
@@ -50,7 +57,7 @@ function LoggerHeader({ active, summary, onClose, onTab }: {
     <View style={{ width: 40, height: 4, borderRadius: 4, backgroundColor: p.border, alignSelf: 'center', margin: 4 }} />
     {active ? <View accessibilityRole="tablist" style={{ flexDirection: 'row', justifyContent: 'space-around',
       paddingHorizontal: 12, borderBottomWidth: 2, borderColor: p.border }}>
-      {(['Search', 'Quick Add'] as const).map(name => <Pressable key={name} role="tab" aria-selected={name === active}
+      {(['Barcode', 'Search', 'Quick Add'] as const).map(name => <Pressable key={name} role="tab" aria-selected={name === active}
         onPress={() => onTab?.(name)} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12,
           borderBottomWidth: 2, borderColor: name === active ? p.text : 'transparent' }}>
         <Label size={12}>{name}</Label>
@@ -59,14 +66,19 @@ function LoggerHeader({ active, summary, onClose, onTab }: {
   </View>;
 }
 
-function FoodRow({ food, onPress }: { food: Food; onPress: () => void }) {
+/** A food result: name, brand, per-100 nutrition, serving, and an optional provenance line. */
+export function FoodRow({ food, detail, hint = 'Log a portion of this food', onPress }: {
+  food: FoodInput & Provenance; detail?: string; hint?: string; onPress: () => void;
+}) {
   const p = usePalette();
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${food.name}, ${round(food.calories)} kilocalories per 100 ${food.basis}`}
-    accessibilityHint="Log a portion of this food" onPress={onPress}
+  return <Pressable accessibilityRole="button"
+    accessibilityLabel={`${food.name}${food.brand ? `, ${food.brand}` : ''}, ${round(food.calories)} kilocalories per 100 ${food.basis}`}
+    accessibilityHint={hint} onPress={onPress}
     style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, minHeight: 44,
       borderBottomWidth: 1, borderColor: p.border }, pressed && { opacity: 0.5 }]}>
     <View style={{ flex: 1, gap: 3 }}><Label size={13}>{food.name}</Label>
-      <Label size={11} muted>{macroLine(food)}  ·  100 {food.basis}{food.serving ? `  ·  ${servingText(food)}` : ''}</Label></View>
+      <Label size={11} muted>{food.brand ? `${food.brand}  ·  ` : ''}{macroLine(food)}  ·  100 {food.basis}{food.serving ? `  ·  ${servingText(food)}` : ''}</Label>
+      {detail ? <Label size={11} muted>{detail}</Label> : null}</View>
     <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: p.field, alignItems: 'center', justifyContent: 'center' }}>
       <Label>+</Label>
     </View>
@@ -98,19 +110,18 @@ function SearchFooter({ query, onChange, onNew }: { query: string; onChange: (va
 }
 
 /** Saved-food search: header totals, local results, and the bottom search field. */
-export function FoodSearch({ summary, query, foods, onQuery, onFood, onNew, onClose, onQuickAdd }: {
+export function FoodSearch({ summary, query, foods, onQuery, onFood, onNew, onClose, onTab }: {
   summary: string; query: string; foods: Food[]; onQuery: (query: string) => void; onFood: (food: Food) => void;
-  onNew: () => void; onClose: () => void; onQuickAdd: () => void;
+  onNew: () => void; onClose: () => void; onTab: (tab: LoggerTab) => void;
 }) {
-  return <Phone dark header={<LoggerHeader active="Search" summary={summary} onClose={onClose}
-    onTab={tab => tab === 'Quick Add' && onQuickAdd()} />}
+  return <Phone dark header={<LoggerHeader active="Search" summary={summary} onClose={onClose} onTab={onTab} />}
     footer={<SearchFooter query={query} onChange={onQuery} onNew={onNew} />}>
     <SearchBody query={query} foods={foods} onFood={onFood} />
   </Phone>;
 }
 
-// The original's plain-text arrows, given a 44-pt hit area.
-function Chevron({ children, label, onPress }: { children: string; label: string; onPress: () => void }) {
+/** The original's plain-text arrows, given a 44-pt hit area. */
+export function Chevron({ children, label, onPress }: { children: string; label: string; onPress: () => void }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
     style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
     <Label>{children}</Label>
@@ -206,19 +217,19 @@ function TimelineBody({ day, entries, targets, onDay, onEntry, onSettings, onTar
   </View>;
 }
 
-function LogFooter({ onSearch, onQuickAdd }: { onSearch: () => void; onQuickAdd: () => void }) {
+function LogFooter({ onSearch, onBarcode, onQuickAdd }: { onSearch: () => void; onBarcode: () => void; onQuickAdd: () => void }) {
   const p = usePalette();
   return <View style={{ backgroundColor: p.surface, paddingHorizontal: 16, paddingTop: 8 }}>
-    <SearchBar onSearch={onSearch} onTools={onQuickAdd} toolsLabel="Quick add" />
+    <SearchBar onSearch={onSearch} onBarcode={onBarcode} onTools={onQuickAdd} toolsLabel="Quick add" />
   </View>;
 }
 
 /** The day's food log: day picker, totals against the current targets, and entries; search opens the logger. */
-export function FoodLog({ day, entries, targets, onDay, onEntry, onSearch, onQuickAdd, onSettings, onTargets }: {
+export function FoodLog({ day, entries, targets, onDay, onEntry, onSearch, onBarcode, onQuickAdd, onSettings, onTargets }: {
   day: string; entries: Entry[]; targets: Targets; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
-  onSearch: () => void; onQuickAdd: () => void; onSettings: () => void; onTargets: () => void;
+  onSearch: () => void; onBarcode: () => void; onQuickAdd: () => void; onSettings: () => void; onTargets: () => void;
 }) {
-  return <Phone dark footer={<LogFooter onSearch={onSearch} onQuickAdd={onQuickAdd} />}>
+  return <Phone dark footer={<LogFooter onSearch={onSearch} onBarcode={onBarcode} onQuickAdd={onQuickAdd} />}>
     <TimelineBody day={day} entries={entries} targets={targets} onDay={onDay} onEntry={onEntry} onSettings={onSettings}
       onTargets={onTargets} />
   </Phone>;
@@ -227,13 +238,13 @@ export function FoodLog({ day, entries, targets, onDay, onEntry, onSearch, onQui
 const macroFields = [['protein', 'Protein'], ['fat', 'Fat'], ['carbs', 'Carbs']] as const;
 
 /** Quick Add for a new entry, or a correction of a logged one, which never changes its food. */
-export function QuickAdd({ summary, form, errors, saveError, correcting, portion, onField, onSave, onDelete, onClose, onSearch }: {
+export function QuickAdd({ summary, form, errors, saveError, correcting, portion, onField, onSave, onDelete, onClose, onTab }: {
   summary: string; form: EntryForm; errors: FormErrors; saveError: string; correcting: boolean; portion: Portion | null;
   onField: (key: keyof EntryForm, text: string) => void; onSave: () => void; onDelete: () => void;
-  onClose: () => void; onSearch: () => void;
+  onClose: () => void; onTab: (tab: LoggerTab) => void;
 }) {
   return <Phone dark header={<LoggerHeader active={correcting ? undefined : 'Quick Add'} summary={summary} onClose={onClose}
-    onTab={tab => tab === 'Search' && onSearch()} />} footer={<Row style={{ justifyContent: 'flex-end', padding: 10, gap: 8 }}>
+    onTab={onTab} />} footer={<Row style={{ justifyContent: 'flex-end', padding: 10, gap: 8 }}>
       {correcting ? <Button danger onPress={onDelete}>Delete entry</Button> : null}
       <Button primary onPress={onSave}>{correcting ? 'Save' : 'Log Food'}</Button>
     </Row>}>
@@ -291,10 +302,12 @@ export function FoodDetail({ summary, food, quantity, unit, preview, error, onQu
   </>}>
     <View style={{ padding: 18, gap: 16, backgroundColor: p.surface }}>
       <Row style={{ gap: 8 }}><Chevron label="Back to foods" onPress={onBack}>‹</Chevron>
-        <Label accessibilityRole="header" size={13} style={{ flex: 1 }}>{food.name}</Label></Row>
+        <View style={{ flex: 1 }}><Label accessibilityRole="header" size={13}>{food.name}</Label>
+          {food.brand ? <Label size={11} muted>{food.brand}</Label> : null}</View></Row>
       <Macros values={[`${round(shown.calories)}`, grams(shown.protein), grams(shown.fat), grams(shown.carbs)]} />
       {preview ? <Label size={12} accessibilityLiveRegion="polite">{portionText(preview.portion)}: {describe(preview.nutrition)}</Label> : null}
       <Label size={12} muted>Per 100 {food.basis}: {describe(food)}</Label>
+      {food.source ? <Label size={12} muted>From {food.source.name}, record {food.source.id.replace('fdc:', '')}, saved {food.source.retrievedOn}. Edits change only this saved copy.</Label> : null}
       <Row style={{ gap: 10 }}><Button hint="Changes future logs only" onPress={onEdit}>Edit Food</Button></Row>
     </View>
   </Phone>;

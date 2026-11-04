@@ -6,29 +6,38 @@ import {
   archiveFood, insertFood, logPortion, parseFoodForm, searchFoods, updateFood,
   type Food, type FoodForm, type FoodFormErrors,
 } from '../foods/foods';
+import { BarcodeLookup, UsdaReview } from '../lookup/BarcodeScreens';
+import { loadUsdaKey } from '../lookup/key';
+import { lookupBarcode, type Lookup, type UsdaFood } from '../lookup/lookup';
 import { loadTargets, parseTargets, saveTargets, type TargetErrors, type Targets } from '../goals/goals';
 import { TargetsForm } from '../goals/TargetsForm';
 import {
   deleteEntry, insertEntry, listEntries, localDay, parseAmount, parseEntryForm, updateEntry,
   type Entry, type EntryForm, type FormErrors, type NutritionForm, type Unit,
 } from './diary';
-import { CreateFood, daySummary, FoodDetail, FoodLog, FoodSearch, QuickAdd } from './LoggingScreens';
+import { CreateFood, daySummary, FoodDetail, FoodLog, FoodSearch, QuickAdd, type LoggerTab } from './LoggingScreens';
 
-// The visible screen. Quick add and corrections share `entry`; `edit` returns to `from` on cancel.
+// A barcode lookup in progress or finished. `result` belongs to `code` as it was when looked up.
+type BarcodeView = { kind: 'barcode'; code: string; result: Lookup | null; looking: boolean };
+// The visible screen. Quick add and corrections share `entry`; `edit` keeps `from`'s brand and
+// source and returns to `back` on cancel; `settings` returns to `back`.
 type View =
   | { kind: 'log' }
   | { kind: 'entry'; id: number | null; form: EntryForm; portion: Entry['portion'] }
   | { kind: 'search' }
+  | BarcodeView
+  | { kind: 'usda'; food: UsdaFood; back: BarcodeView }
   | { kind: 'food'; food: Food; quantity: string; unit: Unit | 'serving' }
-  | { kind: 'edit'; id: number | null; form: FoodForm; from: Food | null }
-  | { kind: 'settings' }
+  | { kind: 'edit'; id: number | null; form: FoodForm; from: Food | null; back: View }
+  | { kind: 'settings'; back: View }
   | { kind: 'targets'; form: NutritionForm };
 
 const blankEntry: View = { kind: 'entry', id: null, form: { label: '', calories: '', protein: '', carbs: '', fat: '' }, portion: null };
 const toText = (n: number | null) => (n === null ? '' : String(n));
 const foodView = (food: Food): View => ({ kind: 'food', food, quantity: '', unit: food.basis });
-const blankFood = (name: string): FoodForm => ({
-  name, basis: 'g', calories: '', protein: '', carbs: '', fat: '', servingName: '', servingAmount: '', barcode: '',
+const blankBarcode: BarcodeView = { kind: 'barcode', code: '', result: null, looking: false };
+const blankFood = (name: string, barcode = ''): FoodForm => ({
+  name, basis: 'g', calories: '', protein: '', carbs: '', fat: '', servingName: '', servingAmount: '', barcode,
 });
 const formOf = (f: Food): FoodForm => ({
   name: f.name, basis: f.basis, calories: String(f.calories), protein: toText(f.protein), carbs: toText(f.carbs),
@@ -55,6 +64,8 @@ export default function Diary() {
   const [error, setError] = useState('');
   // Synchronous lock: a second tap can land before React re-renders after the first.
   const writing = useRef(false);
+  // Bumped by every navigation and lookup, so a late USDA reply never lands on another screen or code.
+  const lookups = useRef(0);
 
   const reload = useCallback(async () => {
     setEntries(await listEntries(db, day));
@@ -68,6 +79,7 @@ export default function Diary() {
   }, [db, query, view.kind]);
 
   function go(next: View) {
+    lookups.current++;
     setView(next);
     setErrors({});
     setError('');
@@ -87,13 +99,27 @@ export default function Diary() {
     }
   }
 
+  async function lookUp(code: string) {
+    const id = ++lookups.current;
+    setView({ kind: 'barcode', code, result: null, looking: true });
+    setError('');
+    let result: Lookup | null = null;
+    try {
+      result = await lookupBarcode(db, code, loadUsdaKey);
+    } catch {
+      if (lookups.current === id) setError('Could not check your saved foods. Try again.');
+    }
+    if (lookups.current === id) setView({ kind: 'barcode', code, result, looking: false });
+  }
+
   const summary = daySummary(entries);
   const close = () => go({ kind: 'log' });
+  const tab = (name: LoggerTab) => go(name === 'Barcode' ? blankBarcode : name === 'Search' ? { kind: 'search' } : blankEntry);
 
   if (view.kind === 'entry') {
     const { id, form } = view;
     return <QuickAdd summary={summary} form={form} errors={errors} saveError={error} correcting={id !== null}
-      portion={view.portion} onClose={close} onSearch={() => go({ kind: 'search' })}
+      portion={view.portion} onClose={close} onTab={tab}
       onField={(key, text) => {
         setErrors(({ [key]: _, ...rest }) => rest);
         setView({ ...view, form: { ...form, [key]: text } });
@@ -114,8 +140,34 @@ export default function Diary() {
 
   if (view.kind === 'search') {
     return <FoodSearch summary={summary} query={query} foods={foods} onQuery={setQuery} onClose={close}
-      onQuickAdd={() => go(blankEntry)} onFood={food => go(foodView(food))}
-      onNew={() => go({ kind: 'edit', id: null, form: blankFood(query.trim()), from: null })} />;
+      onTab={tab} onFood={food => go(foodView(food))}
+      onNew={() => go({ kind: 'edit', id: null, form: blankFood(query.trim()), from: null, back: { kind: 'search' } })} />;
+  }
+
+  if (view.kind === 'barcode') {
+    const { code, result, looking } = view;
+    // The code as last looked up, so a draft edited afterwards never fills in the new food.
+    const looked = result && result.kind !== 'invalid' ? code : '';
+    return <BarcodeLookup summary={summary} code={code} result={result} looking={looking} failure={error}
+      onClose={close} onTab={tab}
+      onCode={text => {
+        lookups.current++;
+        setError('');
+        setView({ kind: 'barcode', code: text, result: null, looking: false });
+      }}
+      onLookUp={() => !looking && lookUp(code)} onFood={food => go(foodView(food))}
+      onUsda={food => go({ kind: 'usda', food, back: view })}
+      onKey={() => go({ kind: 'settings', back: { ...view, result: null } })}
+      onCreate={() => go({ kind: 'edit', id: null, form: blankFood('', looked), from: null, back: view })} />;
+  }
+
+  if (view.kind === 'usda') {
+    const { food, back } = view;
+    return <UsdaReview summary={summary} food={food} error={error} onClose={close} onBack={() => go(back)}
+      onSave={() => write(async () => {
+        const id = await insertFood(db, food, food);
+        return foodView({ ...food, id });
+      })} />;
   }
 
   if (view.kind === 'food') {
@@ -130,7 +182,7 @@ export default function Diary() {
       }}
       onUnit={next => setView({ ...view, unit: next })}
       onBack={() => go({ kind: 'search' })} onClose={close}
-      onEdit={() => go({ kind: 'edit', id: food.id, form: formOf(food), from: food })}
+      onEdit={() => go({ kind: 'edit', id: food.id, form: formOf(food), from: food, back: view })}
       onAdd={() => {
         const checked = logPortion(food, amount ?? NaN, unit);
         if ('error' in checked) return setError(checked.error);
@@ -142,13 +194,13 @@ export default function Diary() {
   }
 
   if (view.kind === 'edit') {
-    const { id, form, from } = view;
+    const { id, form, from, back } = view;
     return <CreateFood editing={id !== null} form={form} errors={errors} error={error}
       onField={(key, value) => {
         setErrors(({ [key]: _, ...rest }) => rest);
         setView({ ...view, form: { ...form, [key]: value } });
       }}
-      onBack={() => go(from ? foodView(from) : { kind: 'search' })}
+      onBack={() => go(back)}
       onSave={() => {
         const result = parseFoodForm(form);
         if ('errors' in result) return setErrors(result.errors);
@@ -183,13 +235,15 @@ export default function Diary() {
 
   if (view.kind === 'settings') {
     // A restore may have replaced every entry, so the log reloads on the way back.
-    return <BackupSettings onClose={() => {
-      close();
+    const { back } = view;
+    return <BackupSettings backLabel={back.kind === 'log' ? 'Back to food log' : 'Back to barcode lookup'} onClose={() => {
+      go(back);
       reload();
     }} />;
   }
 
   return <FoodLog day={day} entries={entries} targets={targets} onDay={setDay} onEntry={e => go(entryView(e))}
-    onSearch={() => go({ kind: 'search' })} onQuickAdd={() => go(blankEntry)} onSettings={() => go({ kind: 'settings' })}
+    onSearch={() => go({ kind: 'search' })} onBarcode={() => go(blankBarcode)} onQuickAdd={() => go(blankEntry)}
+    onSettings={() => go({ kind: 'settings', back: { kind: 'log' } })}
     onTargets={() => go(targetsView(targets))} />;
 }
