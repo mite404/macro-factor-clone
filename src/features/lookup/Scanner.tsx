@@ -10,6 +10,8 @@ import { expandUpcE } from '../foods/foods';
 
 // Package barcodes only. expo-camera reports UPC-A as 12 digits and UPC-E as 8 compressed ones.
 const BARCODE_TYPES: BarcodeType[] = ['ean13', 'ean8', 'upc_a', 'upc_e'];
+// expo-camera restarts the session itself after a media reset, then reports this anyway.
+const RECOVERED = 'Camera session was reset';
 
 function Message({ title, text, children }: { title: string; text: string; children?: ReactNode }) {
   return <View accessibilityRole="alert" style={{ gap: 8 }}>
@@ -36,8 +38,9 @@ export function Scanner({ onScan, onCancel }: { onScan: (code: string) => void; 
 
   const cancel = <Button onPress={onCancel}>Cancel</Button>;
   if (failed) return <Message title="The camera couldn't start"
-    text="This device has no camera the app can use. Type the digits printed under the barcode below.">{cancel}</Message>;
-  if (permission && !permission.granted && (asked || !permission.canAskAgain)) {
+    text="Cancel and tap ▥ to try again, or type the digits printed under the barcode below.">{cancel}</Message>;
+  // Undetermined while the iOS prompt is open: wait behind it rather than reporting access off.
+  if (permission?.status === 'denied') {
     return <Message title="Camera access is off" text={permission.canAskAgain
       ? 'Allow camera access to scan, or type the digits printed under the barcode below.'
       : 'To scan, open Settings, tap Nutrition diary, and turn on Camera. You can type the digits below meanwhile.'}>
@@ -47,10 +50,12 @@ export function Scanner({ onScan, onCancel }: { onScan: (code: string) => void; 
       {cancel}
     </Message>;
   }
+  // ponytail: iOS has no expo-camera call that reports a missing camera, so the Simulator shows an
+  // empty square; add a check if a camera-less device ever becomes a target.
   return <View style={{ gap: 12 }}>
     <View style={{ aspectRatio: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: p.field }}>
       {permission?.granted ? <CameraView style={{ flex: 1 }} facing="back" accessibilityLabel="Barcode camera"
-        barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }} onMountError={() => setFailed(true)}
+        barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }} onMountError={({ message }) => message !== RECOVERED && setFailed(true)}
         onBarcodeScanned={({ type, data }) => {
           if (scanned.current) return;
           scanned.current = true;
