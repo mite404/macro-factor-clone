@@ -5,7 +5,8 @@ import { test } from 'node:test';
 import { migrate } from '../../storage/migrations.ts';
 import { openTestDb } from '../../storage/testDb.ts';
 import {
-  deleteWeight, insertWeight, listWeights, loadWeightUnit, parseWeight, saveWeightUnit, trend, updateWeight,
+  convertForm, deleteWeight, formWeight, insertWeight, listWeights, loadWeightUnit, parseWeight, saveWeightUnit, trend,
+  updateWeight,
 } from './weight.ts';
 
 const at = (series: ReturnType<typeof trend>, day: string) => series.find((t) => t.day === day);
@@ -37,6 +38,19 @@ test('weights are entered in kg or lb, stored in kg without rounding, and must b
   assert.deepEqual(parseWeight('100', 'lb'), { kg: 45.359237 });
   assert.deepEqual(parseWeight(' 80,5 ', 'kg'), { kg: 80.5 });
   for (const text of ['', '0', '-3', 'heavy']) assert.ok('error' in parseWeight(text, 'kg'), text);
+});
+
+test('switching units converts the form, and an untouched value keeps its exact kg', () => {
+  // An opened 100 lb weigh-in, switched to kg and back without typing, still saves 45.359237 kg.
+  const opened = { text: '100', kg: 45.359237 };
+  const inKg = convertForm(opened, 'lb', 'kg');
+  assert.deepEqual(inKg, { text: '45.4', kg: 45.359237 });
+  assert.deepEqual(formWeight(convertForm(inKg, 'kg', 'lb'), 'lb'), { kg: 45.359237 });
+  // 70 typed in kg reads 154.3 lb after the switch, not 70 lb (31.75 kg).
+  assert.deepEqual(convertForm({ text: '70', kg: null }, 'kg', 'lb'), { text: '154.3', kg: 70 });
+  // Typing replaces the exact value; blank or invalid text stays as typed.
+  assert.deepEqual(formWeight({ text: '154', kg: null }, 'lb'), { kg: 154 * 0.45359237 });
+  assert.deepEqual(convertForm({ text: '', kg: null }, 'kg', 'lb'), { text: '', kg: null });
 });
 
 test('one weigh-in per day: insert, explicit replace, delete, unit preference, and reopen', async () => {

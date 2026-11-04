@@ -6,6 +6,8 @@ export type Weight = { day: string; kg: number };
 export type WeightUnit = 'kg' | 'lb';
 // The descriptive average of the weigh-ins in `day` and the six calendar days before it.
 export type Trend = { day: string; kg: number; samples: number };
+// The weigh-in form. `kg` is the exact weight the text shows rounded, until the owner types.
+export type WeightForm = { text: string; kg: number | null };
 
 /** The international avoirdupois pound, exactly. */
 export const KG_PER_LB = 0.45359237;
@@ -14,8 +16,11 @@ export const WINDOW_DAYS = 7;
 /** Converts kilograms to the display unit. */
 export const fromKg = (kg: number, unit: WeightUnit) => (unit === 'kg' ? kg : kg / KG_PER_LB);
 
-/** Rounds to 0.1 in the display unit, as a scale shows it, e.g. "81 kg" or "176.4 lb". */
-export const formatWeight = (kg: number, unit: WeightUnit) => `${Math.round(fromKg(kg, unit) * 10) / 10} ${unit}`;
+/** The display number, rounded to 0.1 in `unit` as a scale shows it, e.g. "176.4". */
+export const weightNumber = (kg: number, unit: WeightUnit) => String(Math.round(fromKg(kg, unit) * 10) / 10);
+
+/** The display number with its unit, e.g. "81 kg" or "176.4 lb". */
+export const formatWeight = (kg: number, unit: WeightUnit) => `${weightNumber(kg, unit)} ${unit}`;
 
 /** Validates a weigh-in typed in `unit`; the result is kilograms, unrounded. */
 export function parseWeight(text: string, unit: WeightUnit): { kg: number } | { error: string } {
@@ -23,6 +28,17 @@ export function parseWeight(text: string, unit: WeightUnit): { kg: number } | { 
   if (value === null) return { error: 'Enter your weight' };
   if (value === undefined || value === 0) return { error: 'Enter a number above 0' };
   return { kg: unit === 'kg' ? value : value * KG_PER_LB };
+}
+
+/** The form's weight in kg: its exact value while untouched, else the text read in `unit`. */
+export function formWeight(form: WeightForm, unit: WeightUnit): { kg: number } | { error: string } {
+  return form.kg === null ? parseWeight(form.text, unit) : { kg: form.kg };
+}
+
+/** Re-expresses the form in `to`, so a unit switch converts the weight rather than relabelling it. */
+export function convertForm(form: WeightForm, from: WeightUnit, to: WeightUnit): WeightForm {
+  const weight = formWeight(form, from);
+  return 'kg' in weight ? { text: weightNumber(weight.kg, to), kg: weight.kg } : form;
 }
 
 /**

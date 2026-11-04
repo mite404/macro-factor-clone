@@ -1011,6 +1011,13 @@ export const WeightReplaceAndPounds: Story = {
     await expect(canvas.queryByText(/Saving replaces it/)).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: 'Save weigh-in' }));
     await expect(await canvas.findByText('avg 45.7 kg · 2 weigh-ins')).toBeVisible();
+    // Switching units in the form converts the shown weight; saving it untouched keeps the exact kg.
+    await userEvent.click(canvas.getByRole('button', { name: /, 45.4 kg, 7-day average/ }));
+    await expect(await canvas.findByLabelText('Weight in kilograms')).toHaveValue('45.4');
+    await userEvent.click(canvas.getByRole('radio', { name: 'Pounds' }));
+    await expect(await canvas.findByLabelText('Weight in pounds')).toHaveValue('100');
+    await userEvent.click(canvas.getByRole('button', { name: 'Save weigh-in' }));
+    await expect(await canvas.findByRole('button', { name: /, 100 lb, 7-day average/ })).toBeVisible();
   },
 };
 
