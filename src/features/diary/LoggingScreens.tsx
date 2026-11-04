@@ -126,9 +126,9 @@ export function FoodSearch({ summary, query, foods, onQuery, onFood, onNew, onCl
   </Phone>;
 }
 
-/** The original's plain-text arrows, given a 44-pt hit area. */
-export function Chevron({ children, label, onPress }: { children: string; label: string; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress}
+/** The original's plain-text arrows, given a 44-pt hit area. `value`, such as the day shown, is read after a press. */
+export function Chevron({ children, label, value, onPress }: { children: string; label: string; value?: string; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} aria-valuetext={value} onPress={onPress}
     style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
     <Label>{children}</Label>
   </Pressable>;
@@ -181,9 +181,9 @@ function TimelineBody({ day, entries, targets, notice, onDay, onEntry, onCopy, o
       {/* Balances the settings button so the date stays centred. */}
       <View style={{ width: 44 }} />
       <Row style={{ gap: 24 }}>
-        <Chevron label="Previous day" onPress={() => onDay(addDays(day, -1))}>‹</Chevron>
+        <Chevron label="Previous day" value={dayName(day)} onPress={() => onDay(addDays(day, -1))}>‹</Chevron>
         <Label accessibilityRole="header" style={{ minWidth: 120, textAlign: 'center' }}>{dayName(day)}</Label>
-        <Chevron label="Next day" onPress={() => onDay(addDays(day, 1))}>›</Chevron>
+        <Chevron label="Next day" value={dayName(day)} onPress={() => onDay(addDays(day, 1))}>›</Chevron>
       </Row>
       <Chevron label="Settings" onPress={onSettings}>⚙︎</Chevron>
     </Row>
@@ -244,10 +244,14 @@ export function FoodLog({ day, entries, targets, notice, onDay, onEntry, onCopy,
 }
 
 /** Selects entries of `day` with visible checkboxes and copies them, as logged, to day `to`. */
-export function CopyEntries({ onCopy, onBack, ...body }: Parameters<typeof CopyBody>[0] & { onCopy: () => void; onBack: () => void }) {
+export function CopyEntries({ copying, onCopy, onBack, ...body }: Parameters<typeof CopyBody>[0] & {
+  copying: boolean; onCopy: () => void; onBack: () => void;
+}) {
   const n = body.ids.length;
   return <Phone dark title="Copy entries" onBack={onBack} backLabel="Cancel" footer={<LoggerFooter>
-    <Button primary disabled={n === 0} onPress={onCopy}>{n === 0 ? 'Select entries to copy' : `Copy ${n} ${n === 1 ? 'entry' : 'entries'}`}</Button>
+    <Button primary disabled={n === 0 || copying} onPress={onCopy}>
+      {n === 0 ? 'Select entries to copy' : copying ? 'Copying…' : `Copy ${n} ${n === 1 ? 'entry' : 'entries'}`}
+    </Button>
   </LoggerFooter>}>
     <CopyBody {...body} />
   </Phone>;
@@ -276,9 +280,9 @@ function CopyBody({ day, entries, ids, to, error, onToggle, onTo }: {
     })}</View>
     <Label size={13}>Copy to</Label>
     <Row style={{ justifyContent: 'center', gap: 24 }}>
-      <Chevron label="Previous destination day" onPress={() => onTo(addDays(to, -1))}>‹</Chevron>
-      <Label accessibilityLiveRegion="polite" style={{ minWidth: 120, textAlign: 'center' }}>{dayName(to)}</Label>
-      <Chevron label="Next destination day" onPress={() => onTo(addDays(to, 1))}>›</Chevron>
+      <Chevron label="Previous destination day" value={dayName(to)} onPress={() => onTo(addDays(to, -1))}>‹</Chevron>
+      <Label style={{ minWidth: 120, textAlign: 'center' }}>{dayName(to)}</Label>
+      <Chevron label="Next destination day" value={dayName(to)} onPress={() => onTo(addDays(to, 1))}>›</Chevron>
     </Row>
     {to === day ? <Label size={12} style={{ color: p.warning }}>Same day: copies are added next to the originals.</Label> : null}
     {error ? <Label accessibilityRole="alert" size={12} style={{ color: p.danger }}>{error}</Label> : null}

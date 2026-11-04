@@ -962,6 +962,7 @@ export const CopyEntriesToToday: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Previous day' }));
     await userEvent.click(await canvas.findByRole('button', { name: 'Copy entries' }));
     await expect(canvas.getByText('Today')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Next destination day' })).toHaveAttribute('aria-valuetext', 'Today');
     await pick('Oats');
     await pick('Rice');
     await pick('Tea');
@@ -969,6 +970,7 @@ export const CopyEntriesToToday: Story = {
     await expect(canvas.getByRole('checkbox', { name: /^Tea,/ })).toHaveAttribute('aria-checked', 'false');
     const copy = canvas.getByRole('button', { name: 'Copy 2 entries' });
     for (let i = 0; i < 3; i++) copy.click();
+    await expect(await canvas.findByRole('button', { name: 'Copying…' })).toHaveAttribute('aria-disabled', 'true');
     releaseCopy();
 
     await expect(await canvas.findByText('Copied 2 entries to Today.')).toBeVisible();

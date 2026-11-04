@@ -82,6 +82,8 @@ export default function Diary() {
   const [error, setError] = useState('');
   // Synchronous lock: a second tap can land before React re-renders after the first.
   const writing = useRef(false);
+  // Mirrors the lock for display, so a running write shows on its button.
+  const [busy, setBusy] = useState(false);
   // Bumped by every navigation and lookup, so a late provider reply never lands on another screen or code.
   const lookups = useRef(0);
 
@@ -121,6 +123,7 @@ export default function Diary() {
   async function write(action: () => Promise<View>) {
     if (writing.current) return;
     writing.current = true;
+    setBusy(true);
     try {
       go(await action());
       reload();
@@ -128,6 +131,7 @@ export default function Diary() {
       setError('Could not save. Your changes are still here; try again.');
     } finally {
       writing.current = false;
+      setBusy(false);
     }
   }
 
@@ -359,7 +363,7 @@ export default function Diary() {
 
   if (view.kind === 'copy') {
     const { ids, to } = view;
-    return <CopyEntries day={day} entries={entries} ids={ids} to={to} error={error} onBack={close}
+    return <CopyEntries day={day} entries={entries} ids={ids} to={to} error={error} copying={busy} onBack={close}
       onToggle={id => setView({ ...view, ids: ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id] })}
       onTo={next => setView({ ...view, to: next })}
       onCopy={() => write(async () => {
