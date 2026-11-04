@@ -3,12 +3,11 @@ name: verifying-nutrition-history
 description: "Runs a bounded exhaustive check that logged diary nutrition, unknown nutrients,
   portions, imported brands and sources, saved barcodes, recipe snapshots, and the current targets
   survive food edits, archiving, corrections, deletes, target edits, reopen, migration, and backup
-  restore,
-  against the real foods/diary/goals/backup/lookup/recipes/storage code on real SQLite. Use when
-  changing src/features/foods/foods.ts, src/features/diary/diary.ts, src/features/goals/goals.ts,
-  src/features/backup/backup.ts, src/features/lookup/lookup.ts, src/features/recipes/recipes.ts,
-  or src/storage/, or when asked
-  whether diary history stays stable."
+  restore, against the real foods/diary/goals/backup/lookup/recipes/storage code on real SQLite.
+  Use when changing src/features/foods/foods.ts, src/features/diary/diary.ts,
+  src/features/goals/goals.ts, src/features/backup/backup.ts, src/features/lookup/lookup.ts,
+  src/features/recipes/recipes.ts, or src/storage/, or when asked whether diary history stays
+  stable."
 ---
 
 # Verifying nutrition history
@@ -103,9 +102,9 @@ The harm in every case is a diary that silently changes or misreports what the o
 
 - Recipe edits (`updateRecipe`), several ingredients, servings, and recipes from foods other than
   food 0. `src/features/recipes/recipes.test.ts` covers those.
-- The UI layer. That means `RecipeScreens.tsx`, `Diary.tsx`, `LoggingScreens.tsx`, `TargetsForm.tsx`,
-  `BackupSettings.tsx`, `BarcodeScreens.tsx`, and `UsdaKey.tsx`, their form round trips, the
-  restore confirmation, the USDA review, and stale component state.
+- The UI layer. That means `RecipeScreens.tsx`, `Diary.tsx`, `LoggingScreens.tsx`,
+  `TargetsForm.tsx`, `BackupSettings.tsx`, `BarcodeScreens.tsx`, and `UsdaKey.tsx`, their form
+  round trips, the restore confirmation, the USDA review, and stale component state.
 - The provider network paths: `searchUsda` and `searchOff` requests, headers, status codes,
   timeout, the old Open Food Facts schema, the explicit `lookupOff` retry, and the other reply
   shapes. `src/features/lookup/lookup.test.ts` covers those with recorded replies. SecureStore and the key

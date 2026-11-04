@@ -265,7 +265,7 @@ function QuickAddBody({ form, errors, saveError, correcting, portion, onField }:
     ? round(protein * 4 + carbs * 4 + fat * 9) : null;
   return <View style={{ padding: 18, gap: 12 }}>
       {correcting ? <Label accessibilityRole="header" weight="600">Edit entry</Label> : null}
-      {portion ? <Label muted size={12}>Logged as {portionText(portion)} of a saved food. Changes here affect only this entry, not the food.</Label> : null}
+      {portion ? <Label muted size={12}>Logged as {portionText(portion)} of {portion.foodId === null ? 'a recipe' : 'a saved food'}. Changes here affect only this entry, not the {portion.foodId === null ? 'recipe' : 'food'}.</Label> : null}
       <Field label="Energy" a11y="Calories in kilocalories" value={form.calories} onChangeText={t => onField('calories', t)}
         suffix="kcal" placeholder="Required" keyboardType="decimal-pad" error={errors.calories} autoFocus={!correcting} />
       {macroSum !== null ? <Label muted size={12}>Macro sum is {macroSum} kcal</Label> : null}

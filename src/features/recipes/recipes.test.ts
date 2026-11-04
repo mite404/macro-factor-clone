@@ -111,5 +111,10 @@ test('food edits leave recipe snapshots alone, and recipe edits leave logged por
   await logged(db, id, 150);
 
   assert.deepEqual((await listEntries(db, day)).map((e) => [e.calories, e.protein]), [[225, 15], [270, 18]]);
+
+  // An edit whose ingredient names a missing food fails as a whole; the saved recipe stays.
+  const before = JSON.stringify(await listRecipes(db));
+  await assert.rejects(updateRecipe(db, id, { name: 'Broken', finishedGrams: 300, ingredients: [{ ...edited.ingredients[0], foodId: 999 }] }));
+  assert.equal(JSON.stringify(await listRecipes(db)), before);
   close();
 });

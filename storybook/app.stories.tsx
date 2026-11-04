@@ -899,6 +899,8 @@ export const RecipeEditKeepsHistory: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
     await expect(await canvas.findByRole('button', { name: /^Trail oats, 100 g, 288 kilocalories/ })).toBeVisible();
     await expect(canvas.getByRole('button', { name: /^Trail oats, 100 g, 185 kilocalories/ })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /^Trail oats, 100 g, 288 kilocalories/ }));
+    await expect(await canvas.findByText('Logged as 100 g of a recipe. Changes here affect only this entry, not the recipe.')).toBeVisible();
   },
 };
 
