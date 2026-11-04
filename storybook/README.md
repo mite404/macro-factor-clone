@@ -28,7 +28,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 20 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 21 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -49,6 +49,7 @@ adds dependencies and needs the owner's approval.
 | `BackupExport` | The downloaded backup equals the restored version 1 fixture, archived food included |
 | `BackupRestoreConfirmation` | Counts and warning, Cancel keeps data, Replace all data replaces it |
 | `BackupRestoreRejectsInvalidFiles` | Malformed, newer-format, and dangling-food files leave data unchanged |
+| `BackupRestoreInProgressLocksNavigation` | Held restore writes: spinner, Cancel and back disabled, then restored |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
 
 These are browser checks of React Native Web. They do not verify native iOS layout, keyboard,

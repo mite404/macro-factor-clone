@@ -228,3 +228,40 @@ export const BackupRestoreRejectsInvalidFiles: Story = {
     await expect(await canvas.findByRole('button', { name: /^Rice, 200 g, 260 kilocalories/ })).toBeVisible();
   },
 };
+
+// Holds the restore's food inserts until the story releases them, so the restore stays in flight.
+let releaseRestore = () => {};
+
+export const BackupRestoreInProgressLocksNavigation: Story = {
+  args: {
+    onInit: async (db) => {
+      await seedRiceToday(db);
+      const gate = new Promise<void>((resolve) => (releaseRestore = resolve));
+      const runAsync = db.runAsync;
+      db.runAsync = async (sql, params) => {
+        if (sql.startsWith('INSERT INTO foods (id,')) await gate;
+        return runAsync(sql, params);
+      };
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'Settings' }));
+    await pickFile(canvas, JSON.stringify(v1Backup));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Replace all data' }));
+
+    await expect(await canvas.findByText('Restoring your backup. Keep the app open until it finishes.')).toBeVisible();
+    for (const name of ['Cancel', 'Cancel restore', 'Restoring…']) {
+      const button = canvas.getByRole('button', { name });
+      await expect(button).toHaveAttribute('aria-disabled', 'true');
+      button.click();
+    }
+    await expect(canvas.queryByText(/Restore cancelled/)).toBeNull();
+    await expect(canvas.queryByRole('button', { name: 'Back to food log' })).toBeNull();
+
+    releaseRestore();
+    await expect(await canvas.findByText('Restored 2 saved foods (1 archived) and 3 diary entries on 2 days, 2026-10-30 to 2026-10-31.')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Back to food log' }));
+    await expect(await canvas.findByText('No entries for this day yet.')).toBeVisible();
+  },
+};

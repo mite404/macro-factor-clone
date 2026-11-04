@@ -1,6 +1,6 @@
 import { useSQLiteContext } from 'expo-sqlite';
 import { useRef, useState } from 'react';
-import { View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import { Button, Card, Label, palettes, Phone, Row } from '../../ui';
 import { localDay } from '../diary/diary';
@@ -36,6 +36,8 @@ export default function BackupSettings({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<Status>(null);
   // Synchronous lock: a second tap can land before React re-renders after the first.
   const busy = useRef(false);
+  // While a restore's transaction is open, nothing may navigate away or write to the database.
+  const [restoring, setRestoring] = useState(false);
   const p = palettes.light;
 
   async function run(action: () => Promise<void>, failure: string) {
@@ -68,18 +70,24 @@ export default function BackupSettings({ onClose }: { onClose: () => void }) {
   if (screen.kind === 'confirm') {
     const { backup, incoming, current } = screen;
     const cancel = () => {
+      if (busy.current) return;
       setScreen({ kind: 'menu' });
       setStatus({ text: `Restore cancelled. ${unchanged}`, error: false });
     };
     const replace = () => run(async () => {
-      await restoreBackup(db, backup);
-      setScreen({ kind: 'menu' });
-      setStatus({ text: `Restored ${describe(incoming)}.`, error: false });
+      setRestoring(true);
+      try {
+        await restoreBackup(db, backup);
+        setScreen({ kind: 'menu' });
+        setStatus({ text: `Restored ${describe(incoming)}.`, error: false });
+      } finally {
+        setRestoring(false);
+      }
     }, `Restore failed, so nothing was replaced. ${unchanged}`);
-    return <Phone title="Restore backup" onBack={cancel} backLabel="Cancel restore"
+    return <Phone title="Restore backup" onBack={restoring ? undefined : cancel} backLabel="Cancel restore"
       footer={<Row style={{ justifyContent: 'flex-end', padding: 18, gap: 8, backgroundColor: p.surface }}>
-        <Button onPress={cancel}>Cancel</Button>
-        <Button danger onPress={replace}>Replace all data</Button>
+        <Button disabled={restoring} onPress={cancel}>Cancel</Button>
+        <Button danger disabled={restoring} onPress={replace}>{restoring ? 'Restoring…' : 'Replace all data'}</Button>
       </Row>}>
       <View style={{ padding: 18, gap: 16 }}>
         <Card style={{ gap: 6 }}>
@@ -96,7 +104,12 @@ export default function BackupSettings({ onClose }: { onClose: () => void }) {
               <Label size={12} muted>If you might need them, cancel and export a backup first.</Label>
             </>}
         </Card>
-        <StatusLine status={status} />
+        {restoring ? <Row style={{ gap: 10 }}>
+          <ActivityIndicator color={p.text} />
+          <Label accessibilityLiveRegion="polite" style={{ flex: 1 }}>
+            Restoring your backup. Keep the app open until it finishes.
+          </Label>
+        </Row> : <StatusLine status={status} />}
       </View>
     </Phone>;
   }

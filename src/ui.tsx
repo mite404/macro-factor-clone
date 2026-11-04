@@ -202,7 +202,8 @@ export function Phone({ children, dark = false, title, onBack, backLabel = 'Back
     </Row> : null}
     {title ? <Row style={{ minHeight: 48, paddingHorizontal: 6, backgroundColor: p.surface }}>
       <Pressable accessibilityRole="button" accessibilityLabel={backLabel} disabled={!onBack} onPress={onBack}
-        style={styles.icon}><Label size={28}>‹</Label></Pressable>
+        // Reference screens draw their back arrow as static chrome; live screens dim a disabled one.
+        style={[styles.icon, !onBack && !framed && { opacity: 0.4 }]}><Label size={28}>‹</Label></Pressable>
       <Label accessibilityRole="header" style={{ flex: 1, textAlign: 'center' }} weight="500">{title}</Label>
       <View style={{ width: 44 }} />
     </Row> : null}
