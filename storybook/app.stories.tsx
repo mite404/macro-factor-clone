@@ -675,7 +675,7 @@ export const BarcodeOffFallbackSaveOffline: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: nutellaRow }));
     await expect(await canvas.findByText('Nothing is saved until you tap Save food.')).toBeVisible();
-    await expect(canvas.getByText('Per 100 g: 539 kcal · P 6.3 · C 57.5 · F 30.9 g')).toBeVisible();
+    await expect(canvas.getByText('Per 100 g: 539 kcal · P 6.3 · C ? · F 30.9 g')).toBeVisible();
     await expect(canvas.getByText('Open Food Facts')).toBeVisible();
     await userEvent.click(canvas.getByRole('link', { name: 'Open Database License' }));
     await expect(opened).toEqual(['https://opendatacommons.org/licenses/odbl/1.0/']);
@@ -697,8 +697,7 @@ export const BarcodeOffFallbackSaveOffline: Story = {
 
 export const BarcodeUsdaLimitOffersOff: Story = {
   args: {
-    onInit: () => stubLookups('storybook-fake-key', [json({ error: { code: 'OVER_RATE_LIMIT' } }, 429)],
-      [json({}, 503), json(nutellaReply)]),
+    onInit: () => stubLookups('storybook-fake-key', [json({ error: { code: 'OVER_RATE_LIMIT' } }, 429)], [json({}, 503)]),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -709,14 +708,16 @@ export const BarcodeUsdaLimitOffersOff: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Try Open Food Facts' }));
     await expect(await canvas.findByText('Open Food Facts is busy')).toBeVisible();
     await expect(canvas.getByText("USDA's hourly limit is used up")).toBeVisible();
-    // Try again repeats only the Open Food Facts request; USDA is not asked again.
+    // Try again repeats only the Open Food Facts request, and within a minute of its 503 the app
+    // waits instead of sending it. USDA is not asked again either.
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
-    await expect(await canvas.findByText("USDA's hourly limit is used up. Open Food Facts has one product with exactly this barcode. Open it to check the nutrition before saving.")).toBeVisible();
-    await expect([usdaCalls.length, offCalls.length]).toEqual([1, 2]);
+    await expect(await canvas.findByText('Open Food Facts is busy')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Try again' })).toBeVisible();
+    await expect([usdaCalls.length, offCalls.length]).toEqual([1, 1]);
   },
 };
 
-// Nutella with no protein or fat in its label record: both stay unknown.
+// Nutella with no protein or fat in its label record, and only net carbs: all three stay unknown.
 const partialNutella = (() => {
   const { proteins: _, fat: __, ...nutrients } = nutellaReply.product.nutrition.aggregated_set.nutrients;
   return { ...nutellaReply, product: { ...nutellaReply.product, nutrition: { aggregated_set: { ...nutellaReply.product.nutrition.aggregated_set, nutrients } } } };
@@ -730,11 +731,11 @@ export const BarcodeOffLargeText: Story = {
     await lookUp(canvas, '3017620422003');
     await expect(await canvas.findByText('Not in your saved foods. Open Food Facts has one product with exactly this barcode. Open it to check the nutrition before saving.')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: nutellaRow }));
-    await expect(await canvas.findByText('Open Food Facts lists no protein or fat. It stays unknown in your log, not 0.')).toBeVisible();
-    await expect(canvas.getByText('Per 100 g: 539 kcal · P ? · C 57.5 · F ? g')).toBeVisible();
+    await expect(await canvas.findByText('Open Food Facts lists no protein or fat or carbs. It stays unknown in your log, not 0.')).toBeVisible();
+    await expect(canvas.getByText('Per 100 g: 539 kcal · P ? · C ? · F ? g')).toBeVisible();
     enlargeText(canvasElement);
     await waitFor(() => {
-      for (const text of ['539', '57.5', 'Open Database License', '3017620422003']) {
+      for (const text of ['539', 'Open Database License', '3017620422003']) {
         const el = canvas.getAllByText(text)[0];
         expect(el.scrollWidth, `${text} is cut off`).toBeLessThanOrEqual(el.clientWidth);
       }

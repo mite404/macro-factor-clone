@@ -199,7 +199,8 @@ test('an exact USDA miss falls back to Open Food Facts, which identifies the app
 
   assert.equal(result.kind, 'not-found');
   assert.deepEqual({ ...off(result) }, {
-    name: 'Nutella', basis: 'g', calories: 539, protein: 6.3, carbs: 57.5, fat: 30.9, barcode: '3017620422003',
+    // Its record lists only net `carbohydrates`, so total carbs are unknown.
+    name: 'Nutella', basis: 'g', calories: 539, protein: 6.3, carbs: null, fat: 30.9, barcode: '3017620422003',
     serving: null, brand: 'Nutella, Ferrero', source: { id: 'off:3017620422003', name: OFF_SOURCE, retrievedOn: localDay() },
     published: null,
   });
@@ -222,8 +223,9 @@ test('with no USDA key, Open Food Facts is asked directly', async () => {
   const food = off(await lookupBarcode(db, '077034085228', noKey, request));
   assert.equal(calls.length, 1);
   assert.ok(calls[0].url.startsWith('https://world.openfoodfacts.org/'));
-  // OFF sends this serving_quantity as the string "28" and has no brand for it.
-  assert.deepEqual([food.serving, food.brand, food.carbs, food.source.id], [{ name: 'serving', amount: 28 }, null, 42.86, 'off:0077034085228']);
+  // OFF sends this serving_quantity as the string "28" and has no brand for it. Its `carbohydrates`
+  // 42.86 is USDA's fiber-inclusive 42.9, so adding its 7.1 g fiber would count fiber twice.
+  assert.deepEqual([food.serving, food.brand, food.carbs, food.source.id], [{ name: 'serving', amount: 28 }, null, null, 'off:0077034085228']);
   close();
 });
 
@@ -250,7 +252,16 @@ test('Open Food Facts nutrition from other records, estimates, or the old schema
   const nutellaSet = nutella.product.nutrition.aggregated_set.nutrients;
 
   const missing = off(await ask(nutellaWith({ proteins: null, fat: null })));
-  assert.deepEqual([missing.calories, missing.protein, missing.fat, missing.carbs], [539, null, null, 57.5], 'missing macros are unknown, not 0');
+  assert.deepEqual([missing.calories, missing.protein, missing.fat, missing.carbs], [539, null, null, null], 'missing macros are unknown, not 0');
+  const total = { ...nutellaSet.carbohydrates, value: 61.2 };
+  assert.equal(off(await ask(nutellaWith({ 'carbohydrates-total': total }))).carbs, 61.2, 'total carbohydrate is used, not net');
+  assert.equal(off(await ask(nutellaWith({ 'carbohydrates-total': { ...total, source: 'packaging', source_index: 2 } }))).carbs, null);
+  // OFF marks bounds such as "<0.5", and values it filled from value_computed, with a modifier.
+  const bounded = off(await ask(nutellaWith({ proteins: { ...nutellaSet.proteins, modifier: '<', value: 0.5 }, 'carbohydrates-total': { ...total, modifier: '~' } })));
+  assert.deepEqual([bounded.protein, bounded.carbs], [null, null], 'a bound is not an exact value');
+  // The fixture's calories also carry value_computed 533.3; an entered value is still used.
+  assert.equal(nutellaSet['energy-kcal'].value_computed, 533.3);
+  assert.equal(off(await ask(nutella)).calories, 539);
   // The fixture's own packaging record (index 2) lists 30 g protein; it must not fill in a gap.
   const merged = off(await ask(nutellaWith({ proteins: { ...nutellaSet.proteins, source: 'packaging', source_index: 2, value: 30 } })));
   assert.equal(merged.protein, null);
@@ -261,6 +272,9 @@ test('Open Food Facts nutrition from other records, estimates, or the old schema
   const unusable: unknown[] = [
     nutellaWith({ 'energy-kcal': null }),
     nutellaWith({ 'energy-kcal': { ...nutellaSet['energy-kcal'], source: 'estimate', source_index: 3 } }),
+    // What OFF writes when the label gave no kcal: a manufacturer value copied from value_computed.
+    nutellaWith({ 'energy-kcal': { source: 'manufacturer', source_index: 0, unit: 'kcal', value: 533.3, modifier: '~' } }),
+    nutellaWith({ 'energy-kcal': { ...nutellaSet['energy-kcal'], modifier: '<' } }),
     nutellaWith({}, { preparation: 'prepared' }),
     nutellaWith({}, { per: 'serving' }),
     nutellaWith({ fat: { ...nutellaSet.fat, unit: 'mg' } }),
@@ -291,6 +305,36 @@ test('Open Food Facts limits, outages, and malformed replies stay distinct from 
   await new Promise(setImmediate);
   t.mock.timers.tick(TIMEOUT_MS);
   assert.deepEqual(await hung, { kind: 'timeout' });
+});
+
+test('Open Food Facts reads are gated at 15 a minute, and a throttled reply pauses them for a minute', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 0 });
+  const { db, close } = await emptyDb();
+  let status = 200;
+  const urls: string[] = [];
+  // One request function, as the app always passes the global fetch to both entry paths.
+  const request = async (input: string | URL | Request) => {
+    urls.push(String(input));
+    return new Response(JSON.stringify(nutella), { status });
+  };
+  for (let i = 0; i < 15; i++) {
+    const result = i % 2 ? await lookupOff('3017620422003', request) : await lookupBarcode(db, '3017620422003', noKey, request);
+    assert.equal(off(result).name, 'Nutella', `read ${i + 1}`);
+  }
+  assert.deepEqual(await lookupOff('3017620422003', request), { kind: 'rate-limited' });
+  assert.deepEqual(await lookupBarcode(db, '3017620422003', noKey, request), { kind: 'missing-key', off: { kind: 'rate-limited' } });
+  assert.equal(urls.length, 15, 'the 16th and 17th reads sent nothing');
+
+  t.mock.timers.tick(60_000);
+  status = 429;
+  assert.deepEqual(await lookupOff('3017620422003', request), { kind: 'rate-limited' });
+  status = 200;
+  t.mock.timers.tick(59_999);
+  assert.deepEqual(await lookupOff('3017620422003', request), { kind: 'rate-limited' }, 'still cooling down');
+  assert.equal(urls.length, 16);
+  t.mock.timers.tick(1);
+  assert.equal(off(await lookupOff('3017620422003', request)).name, 'Nutella', 'recovers after the cooldown');
+  close();
 });
 
 test('a saved Open Food Facts food works offline and keeps its source through backup and restore', async () => {
