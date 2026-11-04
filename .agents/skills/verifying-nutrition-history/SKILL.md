@@ -115,6 +115,10 @@ The harm in every case is a diary that silently changes or misreports what the o
   in for SQLite here, and no file leaves the process.
 - `dayTotals`, `addDays`, `localDay`, multiple days, timezones, search queries other than `''`,
   other quantities and values, and concurrency.
+- Weigh-ins and the weight unit. No op writes them, so `restore` round-trips none. They hold no
+  nutrition, so no property here depends on them. `src/features/weight/weight.test.ts` covers the
+  trend, conversion, and storage, and `src/features/backup/backup.test.ts` covers their backup,
+  restore, rejection, and rollback.
 - Restoring a backup from other data than the database's own, including version 1 files and the
   removal of existing targets by a restore, and the other rejection reasons (size, JSON, format,
   version, values, duplicate ids and targets). `src/features/backup/backup.test.ts`

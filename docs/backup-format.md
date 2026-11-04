@@ -107,6 +107,27 @@ Version 4 adds `recipes` and `recipeIngredients`. They mirror the `recipes` and
 Version 1 to 3 files have no recipes and restore with none. A version 1 to 3 file with either field
 is rejected as an unexpected field. `src/features/backup/backup-v4.json` is the version 4 fixture.
 
+## Version 5
+
+Version 5 adds `weights`, which mirrors the `weights` table, and `weightUnit`, the unit weights
+are entered and shown in.
+
+```json
+"weights": [{ "day": "2026-11-01", "kg": 80 }, { "day": "2026-11-08", "kg": 45.359237 }],
+"weightUnit": "lb"
+```
+
+- Each weigh-in is stored in kilograms, above 0, as entered. A weight typed in pounds is
+  multiplied by exactly 0.45359237 and not rounded, so 100 lb is `45.359237`.
+- `day` is the calendar date of the weigh-in, like a diary entry's, and appears at most once.
+  Replacing a day's weigh-in is an explicit edit, never a second record.
+- `weightUnit` is `kg` or `lb`. It changes only how weights are entered and shown.
+- The 7-day average is not stored. The app computes it from `weights` whenever it shows it.
+
+Version 1 to 4 files have no weigh-ins and restore with none, shown in `kg`. A version 1 to 4
+file with either field is rejected as an unexpected field. `src/features/backup/backup-v5.json` is
+the version 5 fixture.
+
 ## Restore rules
 
 Restore replaces all data. It does not merge. The app reads the whole file and validates it before
@@ -118,8 +139,9 @@ apply:
 - `version` is newer than this app understands, or is not a positive integer.
 - A field or collection is missing, a record has an unexpected field, or a value breaks the same
   rule as its SQLite `CHECK` constraint.
-- An id appears twice in one collection, a diary entry or recipe ingredient refers to a food that
-  is not in the file, an ingredient refers to a missing recipe, or a recipe has no ingredients.
+- An id or weigh-in day appears twice in one collection, a diary entry or recipe ingredient refers
+  to a food that is not in the file, an ingredient refers to a missing recipe, or a recipe has no
+  ingredients.
 
 The confirmation shows what the file holds and what will be deleted. Cancel changes nothing. Replace
 deletes every table and inserts every record inside one SQLite transaction. If any write fails, the

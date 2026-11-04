@@ -5,7 +5,7 @@ import App from '../src/App';
 import { restoreBackup, type Backup } from '../src/features/backup/backup';
 import v1Backup from '../src/features/backup/backup-v1.json';
 import v2Backup from '../src/features/backup/backup-v2.json';
-import v4Backup from '../src/features/backup/backup-v4.json';
+import v5Backup from '../src/features/backup/backup-v5.json';
 import { insertEntry, localDay } from '../src/features/diary/diary';
 import { insertFood } from '../src/features/foods/foods';
 import { saveTargets } from '../src/features/goals/goals';
@@ -290,7 +290,7 @@ export const MeasuredServingWithKeyboard: Story = {
 };
 
 export const BackupExport: Story = {
-  args: { onInit: (db) => restoreBackup(db, v4Backup as Backup) },
+  args: { onInit: (db) => restoreBackup(db, v5Backup as Backup) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const downloads: Blob[] = [];
@@ -308,7 +308,7 @@ export const BackupExport: Story = {
     }
     const exported = JSON.parse(await downloads[0].text());
     await expect(Date.parse(exported.exportedAt)).not.toBeNaN();
-    await expect({ ...exported, exportedAt: v4Backup.exportedAt }).toEqual(v4Backup);
+    await expect({ ...exported, exportedAt: v5Backup.exportedAt }).toEqual(v5Backup);
     await expect(canvas.queryByRole('alert')).toBeNull();
   },
 };
@@ -347,7 +347,7 @@ export const BackupRestoreRejectsInvalidFiles: Story = {
     const dangling = { ...v1Backup, diaryEntries: [{ ...v1Backup.diaryEntries[1], foodId: 3 }] };
     const files: [string, string][] = [
       ['{"format": "nutrition-diary-backup",', 'This file is not valid JSON, so it cannot be a backup.'],
-      [JSON.stringify({ ...v4Backup, version: 5 }), 'This backup was made by a newer version of the app (format 5). Update the app to restore it.'],
+      [JSON.stringify({ ...v5Backup, version: 6 }), 'This backup was made by a newer version of the app (format 6). Update the app to restore it.'],
       [JSON.stringify(dangling), 'Diary entry 7 refers to food 3, which is not in the backup.'],
     ];
     for (const [text, reason] of files) {
@@ -882,7 +882,7 @@ export const RecipeBuildAndLog: Story = {
 export const RecipeEditKeepsHistory: Story = {
   args: {
     onInit: async (db) => {
-      await restoreBackup(db, v4Backup as Backup);
+      await restoreBackup(db, v5Backup as Backup);
       await insertEntry(db, { day: localDay(), label: 'Trail oats', calories: 288, protein: 9.284, carbs: null, fat: 8.988 }, { foodId: null, amount: 100, unit: 'g' });
     },
   },

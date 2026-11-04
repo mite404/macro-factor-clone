@@ -20,8 +20,8 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 function describe(s: BackupSummary): string {
   const foods = count(s.foods, 'saved food', 'saved foods') + (s.archivedFoods ? ` (${s.archivedFoods} archived)` : '');
   const days = s.days === 0 ? '' : s.days === 1 ? ` on ${s.firstDay}` : ` on ${s.days} days, ${s.firstDay} to ${s.lastDay}`;
-  const extras = [s.targets ? count(s.targets, 'daily target', 'daily targets') : '', s.recipes ? count(s.recipes, 'recipe', 'recipes') : '']
-    .filter(Boolean).join(' and ');
+  const extras = [s.targets ? count(s.targets, 'daily target', 'daily targets') : '', s.recipes ? count(s.recipes, 'recipe', 'recipes') : '',
+    s.weights ? count(s.weights, 'weigh-in', 'weigh-ins') : ''].filter(Boolean).join(' and ');
   return `${foods} and ${count(s.entries, 'diary entry', 'diary entries')}${days}${extras ? `, plus ${extras}` : ''}`;
 }
 
@@ -103,8 +103,8 @@ export default function BackupSettings({ onClose, backLabel = 'Back to food log'
         </Card>
         <Card style={{ gap: 6, borderWidth: 1, borderColor: p.danger }}>
           <Label weight="600" style={{ color: p.danger }}>Everything in this app will be replaced</Label>
-          {current.foods + current.entries + current.targets + current.recipes === 0
-            ? <Label>This app has no saved foods, diary entries, targets, or recipes yet, so nothing will be lost.</Label>
+          {current.foods + current.entries + current.targets + current.recipes + current.weights === 0
+            ? <Label>This app has no saved foods, diary entries, targets, recipes, or weigh-ins yet, so nothing will be lost.</Label>
             : <>
               <Label>Your current {describe(current)} will be deleted, not merged. This cannot be undone.</Label>
               <Label size={12} muted>If you might need them, cancel and export a backup first.</Label>
@@ -128,7 +128,7 @@ export default function BackupSettings({ onClose, backLabel = 'Back to food log'
       <Card>
         <Label weight="600">Export a backup</Label>
         <Label size={13} muted>
-          Saves every food, including archived ones, every diary entry, your daily targets, and your recipes to a JSON file you
+          Saves every food, including archived ones, every diary entry, your daily targets, your recipes, and your weigh-ins to a JSON file you
           choose where to keep, such as Files. The file is not encrypted, so keep it somewhere private.
         </Label>
         <Button primary onPress={exportFile}>Export backup</Button>
@@ -136,7 +136,7 @@ export default function BackupSettings({ onClose, backLabel = 'Back to food log'
       <Card>
         <Label weight="600">Restore from a backup</Label>
         <Label size={13} muted>
-          Replaces all foods, diary entries, targets, and recipes in this app with a backup file's. You'll see what the file
+          Replaces all foods, diary entries, targets, recipes, and weigh-ins in this app with a backup file's. You'll see what the file
           holds before anything changes.
         </Label>
         <Button onPress={chooseFile}>Choose backup file</Button>

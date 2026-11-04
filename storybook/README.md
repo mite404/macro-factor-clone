@@ -55,7 +55,7 @@ adds dependencies and needs the owner's approval.
 | `SavedFoodCreateAndLog` | Empty search, create from the search text, validation, 150 g portion |
 | `SavedFoodEditKeepsHistory` | Edit food calories; the earlier diary snapshot stays 184.5 kcal |
 | `MeasuredServingWithKeyboard` | Per-100 ml food, Space selects the serving radio, 2 bottles = 660 ml |
-| `BackupExport` | The downloaded backup equals the restored version 3 fixture, archived food, brand, and targets included |
+| `BackupExport` | The downloaded backup equals the restored version 5 fixture, archived food, brand, targets, recipes, weigh-ins, and unit included |
 | `BackupRestoreConfirmation` | Counts and warning, Cancel keeps data, Replace all data replaces it |
 | `BackupRestoresTargets` | A version 2 file's targets are counted, restored, and compared |
 | `BackupRestoreRejectsInvalidFiles` | Malformed, newer-format, and dangling-food files leave data unchanged |
