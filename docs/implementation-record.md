@@ -161,6 +161,14 @@ fails `CopyEntriesToToday`. The web preview was driven and recorded through the 
 same-day, and result states. Untested: depth 5, VoiceOver, large text on the copy screen, and the
 native build.
 
+[The Fable 5.1 oracle][t09-review] reviewed base `4f8f49f` to head `f356295`: approve, no high or
+medium findings, and four lows. Its effort level was not observable from inside the run. The owner
+chose to fix lows 2 to 4 and leave 1. Low 1: on web, Space does not toggle a copy checkbox; Enter
+does, and iOS is unaffected. Low 2: the log and copy day chevrons now expose the shown day as
+their accessible value, so VoiceOver reads it after a press. Low 3: the Copy button reads Copying
+and is disabled while the batch runs. Low 4: the new mutant where a copy reads the food's current
+calories needs four ops, so `mutants.ts` now pins the check to depth 4.
+
 ## Ticket 07: camera scanning
 
 [Implementation thread][t07-thread]. The owner started ticket 07 on November 4 while the ticket 06
@@ -588,6 +596,7 @@ No merges are authorized by this record. No native build has been verified by th
 [t07-thread]: https://ampcode.com/threads/T-4bd49a1c-f754-4a63-8218-563690c638dd
 [t07-review]: https://ampcode.com/threads/T-4f9e25ad-9fd5-4eb6-89fe-07f62a8955c1
 [t09-thread]: https://ampcode.com/threads/T-a7a0c8d3-3e33-418d-91eb-279195c746f2
+[t09-review]: https://ampcode.com/threads/T-ad4e43d0-9258-41e5-9f1a-3afc75f46dc5
 [backup-thread]: https://ampcode.com/threads/T-92446160-d0c9-4113-8d29-e772c221d832
 [targets-thread]: https://ampcode.com/threads/T-726bca15-3a60-4507-a2a7-e12b1b49595e
 [lookup-thread]: https://ampcode.com/threads/T-68986624-b1ed-44fc-be7b-6ae0d6bed2eb
