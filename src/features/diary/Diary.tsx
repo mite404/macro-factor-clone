@@ -18,7 +18,8 @@ import {
 import { CreateFood, daySummary, FoodDetail, FoodLog, FoodSearch, QuickAdd, type LoggerTab } from './LoggingScreens';
 
 // A barcode lookup in progress or finished. `result` belongs to `code` as it was when looked up.
-type BarcodeView = { kind: 'barcode'; code: string; result: Lookup | null; looking: boolean };
+// `scanning` shows the camera in place of the result; a scan closes it and looks the code up.
+type BarcodeView = { kind: 'barcode'; code: string; result: Lookup | null; looking: boolean; scanning: boolean };
 // The visible screen. Quick add and corrections share `entry`; `edit` keeps `from`'s brand and
 // source and returns to `back` on cancel; `settings` returns to `back`.
 type View =
@@ -35,7 +36,7 @@ type View =
 const blankEntry: View = { kind: 'entry', id: null, form: { label: '', calories: '', protein: '', carbs: '', fat: '' }, portion: null };
 const toText = (n: number | null) => (n === null ? '' : String(n));
 const foodView = (food: Food): View => ({ kind: 'food', food, quantity: '', unit: food.basis });
-const blankBarcode: BarcodeView = { kind: 'barcode', code: '', result: null, looking: false };
+const blankBarcode: BarcodeView = { kind: 'barcode', code: '', result: null, looking: false, scanning: false };
 const blankFood = (name: string, barcode = ''): FoodForm => ({
   name, basis: 'g', calories: '', protein: '', carbs: '', fat: '', servingName: '', servingAmount: '', barcode,
 });
@@ -102,7 +103,7 @@ export default function Diary() {
   // Looks `code` up from the start, or, given USDA's outcome `after`, asks Open Food Facts alone.
   async function lookUp(code: string, after: Miss | null = null) {
     const id = ++lookups.current;
-    setView({ kind: 'barcode', code, result: after, looking: true });
+    setView({ kind: 'barcode', code, result: after, looking: true, scanning: false });
     setError('');
     let result: Lookup | null = after;
     try {
@@ -110,7 +111,7 @@ export default function Diary() {
     } catch {
       if (lookups.current === id) setError('Could not check your saved foods. Try again.');
     }
-    if (lookups.current === id) setView({ kind: 'barcode', code, result, looking: false });
+    if (lookups.current === id) setView({ kind: 'barcode', code, result, looking: false, scanning: false });
   }
 
   const summary = daySummary(entries);
@@ -146,16 +147,18 @@ export default function Diary() {
   }
 
   if (view.kind === 'barcode') {
-    const { code, result, looking } = view;
+    const { code, result, looking, scanning } = view;
     // The code as last looked up, so a draft edited afterwards never fills in the new food.
     const looked = result && result.kind !== 'invalid' ? code : '';
-    return <BarcodeLookup summary={summary} code={code} result={result} looking={looking} failure={error}
+    return <BarcodeLookup summary={summary} code={code} result={result} looking={looking} scanning={scanning} failure={error}
       onClose={close} onTab={tab}
       onCode={text => {
         lookups.current++;
         setError('');
-        setView({ kind: 'barcode', code: text, result: null, looking: false });
+        setView({ ...view, code: text, result: null, looking: false });
       }}
+      onScanner={open => setView({ ...view, scanning: open })}
+      onScan={scanned => !looking && lookUp(scanned)}
       onLookUp={() => !looking && lookUp(code)} onFood={food => go(foodView(food))}
       onOff={miss => !looking && lookUp(code, miss)}
       onReview={food => go({ kind: 'review', food, back: view })}
