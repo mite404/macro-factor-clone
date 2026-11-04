@@ -29,7 +29,7 @@ code is in `src/features/backup/`. `backup.ts` owns the format, validation, and 
 - `exportedAt` is informational. Restore shows it and does not store it.
 
 The file holds personal data in plain text. It is not encrypted, and the app never uploads it.
-Credentials, such as the USDA key planned for ticket 05, live in the iOS Keychain, not SQLite.
+Credentials, such as the owner's USDA key, live in the iOS Keychain through SecureStore, not SQLite.
 Export reads only the tables in this document, so they cannot appear in a backup.
 
 ## Version 2
@@ -48,6 +48,27 @@ Version 2 adds `targets`, the one current set of daily targets. It mirrors the `
 
 A version 1 file has no `targets` field and restores with no targets. A version 1 file that has
 one is rejected as an unexpected field. `src/features/backup/backup-v2.json` is the version 2
+fixture.
+
+## Version 3
+
+Version 3 adds `brand` to each food: the brand a provider reported, such as USDA's `brandName`, or
+`null` for a food the owner created.
+
+```json
+{ "id": 5, "name": "NUT 'N BERRY MIX", "basis": "g", "calories": 500, "protein": 14.3,
+  "carbs": 42.9, "fat": 32.1, "servingName": "1 ONZ", "servingAmount": 28,
+  "barcode": "077034085228", "brand": "KAR'S", "sourceId": "fdc:2105222",
+  "sourceName": "USDA FoodData Central", "retrievedOn": "2026-11-04", "archived": false }
+```
+
+- `brand` is a non-empty string or `null`. It sits apart from `name`, so editing a food's name
+  keeps its brand, and edits never change `brand` or the source fields.
+- A USDA import sets `sourceId` to `fdc:` and its FoodData Central id, `sourceName` to `USDA
+  FoodData Central`, and `retrievedOn` to the day it was saved.
+
+Version 1 and 2 files have no `brand` and restore with `brand: null`. A version 1 or 2 food that
+has one is rejected as an unexpected field. `src/features/backup/backup-v3.json` is the version 3
 fixture.
 
 ## Restore rules

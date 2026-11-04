@@ -44,6 +44,8 @@ export const migrations = [
     nutrient TEXT PRIMARY KEY CHECK (nutrient IN ('calories', 'protein', 'carbs', 'fat')),
     amount REAL NOT NULL CHECK (amount > 0)
   );`,
+  // The brand a provider reported for an imported food, kept apart from its name.
+  `ALTER TABLE foods ADD COLUMN brand TEXT CHECK (brand <> '');`,
 ];
 
 /**

@@ -155,7 +155,7 @@ export default function Diary() {
         write(async () => {
           const savedId = id ?? (await insertFood(db, result.food));
           if (id !== null) await updateFood(db, id, result.food);
-          return foodView({ ...result.food, id: savedId });
+          return foodView({ brand: null, source: null, ...from, ...result.food, id: savedId });
         });
       }}
       onArchive={() => id !== null && write(async () => {

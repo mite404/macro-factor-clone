@@ -8,7 +8,10 @@ export type FoodInput = Nutrition & {
   serving: { name: string; amount: number } | null;
   barcode: string | null; // digits as text; leading zeros are meaningful
 };
-export type Food = FoodInput & { id: number };
+// Where an imported food came from. Manual foods have none, and edits never change it.
+export type Source = { id: string; name: string; retrievedOn: string };
+export type Provenance = { brand: string | null; source: Source | null };
+export type Food = FoodInput & Provenance & { id: number };
 
 export type FoodForm = NutritionForm & {
   name: string;
@@ -20,7 +23,9 @@ export type FoodForm = NutritionForm & {
 export type FoodFormErrors = Partial<Record<keyof FoodForm, string>>;
 
 const columns = `id, name, basis, calories, protein, carbs, fat,
-  serving_name AS servingName, serving_amount AS servingAmount, barcode`;
+  serving_name AS servingName, serving_amount AS servingAmount, barcode, brand,
+  source_id AS sourceId, source_name AS sourceName, retrieved_on AS retrievedOn`;
+const manual: Provenance = { brand: null, source: null };
 const scale = (value: number | null, factor: number) => (value === null ? null : (value * factor) / 100);
 
 /** Validates food form text at the input boundary. */
@@ -74,19 +79,26 @@ export function logPortion(
   };
 }
 
+type FoodRow = Omit<Food, 'serving' | 'source'> & {
+  servingName: string | null; servingAmount: number | null; sourceId: string | null; sourceName: string | null;
+  retrievedOn: string | null;
+};
+// The schema keeps serving name and amount set together; imports always set all three source fields.
+const toFood = ({ servingName, servingAmount, sourceId, sourceName, retrievedOn, ...food }: FoodRow): Food => ({
+  ...food,
+  serving: servingName === null ? null : { name: servingName, amount: servingAmount! },
+  source: sourceId === null ? null : { id: sourceId, name: sourceName!, retrievedOn: retrievedOn! },
+});
+
 /** Saved, unarchived foods whose name contains `query` (case-insensitive), by name. Local only. */
 export async function searchFoods(db: Db, query: string): Promise<Food[]> {
-  const rows = await db.getAllAsync<Omit<Food, 'serving'> & { servingName: string | null; servingAmount: number | null }>(
+  const rows = await db.getAllAsync<FoodRow>(
     `SELECT ${columns} FROM foods
      WHERE archived = 0 AND name LIKE ? ESCAPE '\\'
      ORDER BY name COLLATE NOCASE LIMIT 100`,
     [`%${query.trim().replace(/[\\%_]/g, '\\$&')}%`],
   );
-  // The schema keeps serving name and amount set together.
-  return rows.map(({ servingName, servingAmount, ...food }) => ({
-    ...food,
-    serving: servingName === null ? null : { name: servingName, amount: servingAmount! },
-  }));
+  return rows.map(toFood);
 }
 
 function values(f: FoodInput) {
@@ -94,20 +106,21 @@ function values(f: FoodInput) {
 }
 
 /**
+ * @param provenance An import's brand and source; a manual food has neither.
  * @returns The new food's id.
  * @throws If the storage CHECK constraints reject the values.
  */
-export async function insertFood(db: Db, f: FoodInput): Promise<number> {
+export async function insertFood(db: Db, f: FoodInput, { brand, source }: Provenance = manual): Promise<number> {
   const { lastInsertRowId } = await db.runAsync(
-    `INSERT INTO foods (name, basis, calories, protein, carbs, fat, serving_name, serving_amount, barcode)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    values(f),
+    `INSERT INTO foods (name, basis, calories, protein, carbs, fat, serving_name, serving_amount, barcode,
+     brand, source_id, source_name, retrieved_on) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [...values(f), brand, source?.id ?? null, source?.name ?? null, source?.retrievedOn ?? null],
   );
   return lastInsertRowId;
 }
 
 /**
- * Changes how the food logs from now on. Diary entries keep their snapshots; provenance is untouched.
+ * Changes how the food logs from now on. Diary entries keep their snapshots; brand and source are untouched.
  * @throws If the storage CHECK constraints reject the values.
  */
 export async function updateFood(db: Db, id: number, f: FoodInput): Promise<void> {

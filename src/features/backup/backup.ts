@@ -15,6 +15,7 @@ export type BackupFood = {
   servingName: string | null;
   servingAmount: number | null;
   barcode: string | null;
+  brand: string | null;
   sourceId: string | null;
   sourceName: string | null;
   retrievedOn: string | null;
@@ -53,7 +54,7 @@ export type BackupSummary = {
 };
 
 export const BACKUP_FORMAT = 'nutrition-diary-backup';
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 /** Larger files are refused before they are read. Years of daily logging stay far below this. */
 export const MAX_BACKUP_BYTES = 20 * 1024 * 1024;
 export const TOO_LARGE = 'This file is larger than 20 MB, too large for a backup.';
@@ -73,7 +74,7 @@ const orNull = (check: Check): Check => (v) => v === null || check(v);
 // Field checks mirror the CHECK constraints in src/storage/migrations.ts.
 const foodFields: Record<keyof BackupFood, Check> = {
   id, name: nonEmpty, basis: unit, calories: amount, protein: orNull(amount), carbs: orNull(amount), fat: orNull(amount),
-  servingName: orNull(nonEmpty), servingAmount: orNull(positive), barcode: orNull(digits),
+  servingName: orNull(nonEmpty), servingAmount: orNull(positive), barcode: orNull(digits), brand: orNull(nonEmpty),
   sourceId: orNull(text), sourceName: orNull(text), retrievedOn: orNull(text), archived: (v) => typeof v === 'boolean',
 };
 const entryFields: Record<keyof BackupEntry, Check> = {
@@ -85,9 +86,12 @@ const targetFields: Record<keyof BackupTarget, Check> = {
 };
 // Collections each version holds. Version 1 predates targets.
 const collections = (version: number) => ['foods', 'diaryEntries', ...(version >= 2 ? ['targets'] : [])];
+// Food fields each version holds. Versions 1 and 2 predate brand.
+const { brand: _, ...foodFieldsV1 } = foodFields;
+const foodFieldsFor = (version: number): Record<string, Check> => (version >= 3 ? foodFields : foodFieldsV1);
 
 const foodColumns = `id, name, basis, calories, protein, carbs, fat, serving_name AS servingName,
-  serving_amount AS servingAmount, barcode, source_id AS sourceId, source_name AS sourceName,
+  serving_amount AS servingAmount, barcode, brand, source_id AS sourceId, source_name AS sourceName,
   retrieved_on AS retrievedOn, archived`;
 const entryColumns = 'id, day, label, calories, protein, carbs, fat, food_id AS foodId, amount, unit';
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -122,7 +126,7 @@ function backupError(raw: unknown): string | null {
   for (const key of collections(raw.version as number)) if (!Array.isArray(raw[key])) return `The backup's ${key} is missing.`;
   const foods = raw.foods as BackupFood[];
   const entries = raw.diaryEntries as BackupEntry[];
-  const problem = recordError('Food', foods, foodFields) ?? recordError('Diary entry', entries, entryFields)
+  const problem = recordError('Food', foods, foodFieldsFor(raw.version as number)) ?? recordError('Diary entry', entries, entryFields)
     ?? recordError('Target', (raw.targets ?? []) as unknown[], targetFields, 'nutrient');
   if (problem) return `${problem}.`;
   const badFood = foods.find((f) => (f.servingName === null) !== (f.servingAmount === null));
@@ -158,7 +162,7 @@ export async function exportBackup(db: Db, now = new Date()): Promise<Backup> {
 /**
  * Validates a whole backup file before anything is written. Rejects oversized and malformed files,
  * newer formats, invalid values, duplicate ids, and diary entries that refer to missing foods.
- * An earlier version is upgraded: collections it could not hold become empty.
+ * An earlier version is upgraded: collections it could not hold become empty, and fields null.
  */
 export function parseBackup(json: string): { backup: Backup } | { error: string } {
   if (json.length > MAX_BACKUP_BYTES) return { error: TOO_LARGE };
@@ -170,8 +174,15 @@ export function parseBackup(json: string): { backup: Backup } | { error: string 
   }
   const error = backupError(raw);
   if (error) return { error };
-  const valid = raw as Omit<Backup, 'version' | 'targets'> & { targets?: BackupTarget[] };
-  return { backup: { ...valid, version: BACKUP_VERSION, targets: valid.targets ?? [] } };
+  const valid = raw as Omit<Backup, 'version' | 'targets' | 'foods'> & { targets?: BackupTarget[]; foods: Omit<BackupFood, 'brand'>[] };
+  return {
+    backup: {
+      ...valid,
+      version: BACKUP_VERSION,
+      foods: valid.foods.map((f) => ({ brand: null, ...f })), // → BackupFood[]; a version 3 brand wins
+      targets: valid.targets ?? [],
+    },
+  };
 }
 
 /** Counts what a backup holds, for the confirmation before it replaces anything. */
@@ -199,9 +210,9 @@ export async function restoreBackup(db: Db, backup: Backup): Promise<void> {
     for (const f of backup.foods) {
       await db.runAsync(
         `INSERT INTO foods (id, name, basis, calories, protein, carbs, fat, serving_name, serving_amount, barcode,
-         source_id, source_name, retrieved_on, archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         brand, source_id, source_name, retrieved_on, archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [f.id, f.name, f.basis, f.calories, f.protein, f.carbs, f.fat, f.servingName, f.servingAmount, f.barcode,
-          f.sourceId, f.sourceName, f.retrievedOn, f.archived ? 1 : 0],
+          f.brand, f.sourceId, f.sourceName, f.retrievedOn, f.archived ? 1 : 0],
       );
     }
     for (const e of backup.diaryEntries) {

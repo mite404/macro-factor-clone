@@ -38,7 +38,7 @@ function valid(fields: Partial<FoodForm>) {
 }
 async function save(db: Parameters<typeof insertFood>[0], fields: Partial<FoodForm>): Promise<Food> {
   const input = valid(fields);
-  return { ...input, id: await insertFood(db, input) };
+  return { ...input, brand: null, source: null, id: await insertFood(db, input) };
 }
 async function log(db: Parameters<typeof insertFood>[0], food: Food, quantity: number, unit: Parameters<typeof logPortion>[2]) {
   const result = logPortion(food, quantity, unit);

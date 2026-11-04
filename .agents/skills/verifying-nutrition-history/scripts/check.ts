@@ -18,6 +18,7 @@ import {
   updateFood,
   type Food,
   type FoodForm,
+  type Provenance,
 } from '../../../../src/features/foods/foods.ts';
 import { loadTargets, parseTargets, saveTargets, type Targets } from '../../../../src/features/goals/goals.ts';
 import { migrate, migrations, type Db } from '../../../../src/storage/migrations.ts';
@@ -25,7 +26,8 @@ import { openTestDb } from '../../../../src/storage/testDb.ts';
 
 type Nut = { calories: number; protein: number | null; carbs: number | null; fat: number | null };
 type Template = { form: FoodForm; per100: Nut; serving: { name: string; amount: number } | null; barcode: string | null };
-type Slot = { id: number; t: Template; archived: boolean } | null;
+// A saved food's brand and source are set when it is saved and no edit changes them.
+type Slot = { id: number; t: Template; archived: boolean; provenance: Provenance } | null;
 type ExpectedEntry = Omit<Entry, 'id'>;
 type State = { slots: [Slot, Slot]; entries: ExpectedEntry[]; targets: Targets; saves: number; rejected: boolean };
 type Op = { name: string; words: string; slot: 0 | 1; next: (s: State) => State | null };
@@ -76,6 +78,7 @@ const RICE: Template = {
   serving: { name: 'bowl', amount: 185 },
   barcode: null,
 };
+const MANUAL: Provenance = { brand: null, source: null };
 const CORRECTION = { label: ' Fixed ', calories: '200', protein: '', carbs: '0', fat: '3,5' };
 const CORRECTED = { label: 'Fixed', calories: 200, protein: null, carbs: 0, fat: 3.5 };
 // Target forms as typed, and the one current set each must leave. Blank means no target.
@@ -92,8 +95,8 @@ const withSlot = (s: State, i: 0 | 1, slot: Slot): State => {
 };
 
 // The spec oracle: the state the app must reach, or null when the UI cannot reach the op.
-const save = (i: 0 | 1, t: Template) => (s: State) =>
-  s.slots[i] === null ? { ...withSlot(s, i, { id: s.saves + 1, t, archived: false }), saves: s.saves + 1 } : null;
+const save = (i: 0 | 1, t: Template, provenance = MANUAL) => (s: State) =>
+  s.slots[i] === null ? { ...withSlot(s, i, { id: s.saves + 1, t, archived: false, provenance }), saves: s.saves + 1 } : null;
 const edit = (i: 0 | 1, t: Template) => (s: State) => (live(s, i) ? withSlot(s, i, { ...s.slots[i]!, t }) : null);
 const archive = (i: 0 | 1) => (s: State) => (live(s, i) ? withSlot(s, i, { ...s.slots[i]!, archived: true }) : null);
 const log = (i: 0 | 1, quantity: number, unit: 'g' | 'ml' | 'serving') => (s: State) => {
@@ -165,7 +168,7 @@ function compareEntries(expected: ExpectedEntry[], actual: Entry[]): Failure | n
 function compareFoods(s: State, actual: Food[]): Failure | null {
   const expected = s.slots
     .filter((x): x is NonNullable<Slot> => x !== null && !x.archived)
-    .map(({ id, t }): Food => ({ id, name: t.form.name, basis: t.form.basis, ...t.per100, serving: t.serving, barcode: t.barcode }))
+    .map(({ id, t, provenance }): Food => ({ id, name: t.form.name, basis: t.form.basis, ...t.per100, serving: t.serving, barcode: t.barcode, ...provenance }))
     .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
   if (isDeepStrictEqual(expected, actual.map((f) => ({ ...f })))) return null;
   const archived = s.slots.filter((x) => x?.archived).map((x) => x!.id);
@@ -178,13 +181,21 @@ function compareFoods(s: State, actual: Food[]): Failure | null {
 async function compareArchived(db: Db, s: State): Promise<Failure | null> {
   const expected = s.slots
     .filter((x): x is NonNullable<Slot> => x !== null && x.archived)
-    .map(({ id, t }) => ({ id, name: t.form.name, basis: t.form.basis, ...t.per100, serving: t.serving, barcode: t.barcode }))
+    .map(({ id, t, provenance }) => ({ id, name: t.form.name, basis: t.form.basis, ...t.per100, serving: t.serving, barcode: t.barcode, ...provenance }))
     .sort((a, b) => a.id - b.id);
-  const rows = await db.getAllAsync<Omit<Food, 'serving'> & { servingName: string | null; servingAmount: number | null }>(
-    `SELECT id, name, basis, calories, protein, carbs, fat, serving_name AS servingName, serving_amount AS servingAmount, barcode
+  type Row = Omit<Food, 'serving' | 'source'> & {
+    servingName: string | null; servingAmount: number | null; sourceId: string | null; sourceName: string | null; retrievedOn: string | null;
+  };
+  const rows = await db.getAllAsync<Row>(
+    `SELECT id, name, basis, calories, protein, carbs, fat, serving_name AS servingName, serving_amount AS servingAmount, barcode,
+     brand, source_id AS sourceId, source_name AS sourceName, retrieved_on AS retrievedOn
      FROM foods WHERE archived = 1 ORDER BY id`, [],
   );
-  const actual = rows.map(({ servingName, servingAmount, ...f }) => ({ ...f, serving: servingName === null ? null : { name: servingName, amount: servingAmount } }));
+  const actual = rows.map(({ servingName, servingAmount, sourceId, sourceName, retrievedOn, ...f }) => ({
+    ...f,
+    serving: servingName === null ? null : { name: servingName, amount: servingAmount },
+    source: sourceId === null ? null : { id: sourceId, name: sourceName, retrievedOn },
+  }));
   if (isDeepStrictEqual(expected, actual)) return null;
   return { property: 'F3 archived-food-kept', detail: `expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(actual)}` };
 }
