@@ -12,6 +12,9 @@ export type FoodInput = Nutrition & {
 export type Source = { id: string; name: string; retrievedOn: string };
 export type Provenance = { brand: string | null; source: Source | null };
 export type Food = FoodInput & Provenance & { id: number };
+// A valid GTIN-8, -12 (UPC-A), -13 (EAN), or -14, right-aligned to 14 digits. Every shorter form
+// of one product pads to the same 14 digits; different products never do.
+export type Gtin = string & { readonly gtin: unique symbol };
 
 export type FoodForm = NutritionForm & {
   name: string;
@@ -28,6 +31,22 @@ const columns = `id, name, basis, calories, protein, carbs, fat,
 const manual: Provenance = { brand: null, source: null };
 const scale = (value: number | null, factor: number) => (value === null ? null : (value * factor) / 100);
 
+/**
+ * Validates typed barcode digits, ignoring spaces and hyphens, including the GS1 check digit.
+ * ponytail: an 8-digit code is read as EAN-8; expand UPC-E when the camera (ticket 07) reports it.
+ */
+export function parseGtin(text: string): { gtin: Gtin; digits: string } | { error: string } {
+  const digits = text.replace(/[\s-]/g, '');
+  if (digits === '') return { error: 'Enter the digits under the barcode' };
+  if (!/^\d+$/.test(digits)) return { error: 'Use digits only' };
+  if (![8, 12, 13, 14].includes(digits.length)) return { error: 'A barcode has 8, 12, 13, or 14 digits' };
+  const gtin = digits.padStart(14, '0');
+  // GS1: weight 3 and 1 alternate from the digit left of the check digit.
+  const sum = gtin.slice(0, 13).split('').reduce((total, d, i) => total + Number(d) * (i % 2 === 0 ? 3 : 1), 0);
+  if ((10 - (sum % 10)) % 10 !== Number(gtin[13])) return { error: "The last digit doesn't match. Check each digit" };
+  return { gtin: gtin as Gtin, digits };
+}
+
 /** Validates food form text at the input boundary. */
 export function parseFoodForm(form: FoodForm): { food: FoodInput } | { errors: FoodFormErrors } {
   const nutrition = parseNutrition(form);
@@ -39,8 +58,8 @@ export function parseFoodForm(form: FoodForm): { food: FoodInput } | { errors: F
   if (servingAmount === undefined || servingAmount === 0) errors.servingAmount = 'Enter an amount above 0';
   else if (servingName === '' && servingAmount !== null) errors.servingName = 'Name this serving';
   else if (servingName !== '' && servingAmount === null) errors.servingAmount = `Enter its amount in ${form.basis}`;
-  const barcode = form.barcode.trim();
-  if (!/^\d*$/.test(barcode)) errors.barcode = 'Use digits only';
+  const code = form.barcode.trim() === '' ? null : parseGtin(form.barcode);
+  if (code && 'error' in code) errors.barcode = code.error;
   if (Object.keys(errors).length > 0 || 'errors' in nutrition) return { errors };
   return {
     food: {
@@ -48,7 +67,7 @@ export function parseFoodForm(form: FoodForm): { food: FoodInput } | { errors: F
       basis: form.basis,
       ...nutrition.nutrition,
       serving: servingAmount ? { name: servingName, amount: servingAmount } : null,
-      barcode: barcode || null,
+      barcode: code && 'digits' in code ? code.digits : null,
     },
   };
 }
@@ -99,6 +118,17 @@ export async function searchFoods(db: Db, query: string): Promise<Food[]> {
     [`%${query.trim().replace(/[\\%_]/g, '\\$&')}%`],
   );
   return rows.map(toFood);
+}
+
+/** Saved, unarchived foods whose barcode is the same product as `gtin`, in any GTIN length. Local only. */
+export async function findFoodsByBarcode(db: Db, gtin: Gtin): Promise<Food[]> {
+  const rows = await db.getAllAsync<FoodRow>(
+    `SELECT ${columns} FROM foods WHERE archived = 0 AND barcode IS NOT NULL ORDER BY id`, [],
+  ); // → FoodRow[] with any stored digits, including pre-validation ones such as "0070"
+  return rows.filter((row) => {
+    const code = parseGtin(row.barcode!);
+    return 'gtin' in code && code.gtin === gtin;
+  }).map(toFood);
 }
 
 function values(f: FoodInput) {

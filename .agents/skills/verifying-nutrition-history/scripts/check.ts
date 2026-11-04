@@ -49,10 +49,10 @@ const SCRATCH = existsSync('/dev/shm') ? '/dev/shm' : tmpdir();
 // Blank means unknown (null); '0' means a known zero. Names are distinct so search order is total.
 const blank = { protein: '', carbs: '', fat: '', servingName: '', servingAmount: '', barcode: '' };
 const OATS: Template = {
-  form: { ...blank, name: 'Oats', basis: 'g', calories: '123', protein: '8', fat: '0', servingName: 'cup', servingAmount: '40', barcode: ' 0070 ' },
+  form: { ...blank, name: 'Oats', basis: 'g', calories: '123', protein: '8', fat: '0', servingName: 'cup', servingAmount: '40', barcode: ' 0036000291452 ' },
   per100: { calories: 123, protein: 8, carbs: null, fat: 0 },
   serving: { name: 'cup', amount: 40 },
-  barcode: '0070',
+  barcode: '0036000291452',
 };
 const JUICE: Template = {
   form: { ...blank, name: 'Juice', basis: 'ml', calories: '45', carbs: '10.4' },
@@ -67,10 +67,10 @@ const BAR: Template = {
   barcode: null,
 };
 const OAT_MILK: Template = {
-  form: { ...blank, name: 'Oat milk', basis: 'ml', calories: '46', protein: '1', fat: '1.5', barcode: '000123' },
+  form: { ...blank, name: 'Oat milk', basis: 'ml', calories: '46', protein: '1', fat: '1.5', barcode: '012345678905' },
   per100: { calories: 46, protein: 1, carbs: null, fat: 1.5 },
   serving: null,
-  barcode: '000123',
+  barcode: '012345678905',
 };
 const RICE: Template = {
   form: { ...blank, name: 'Rice', basis: 'g', calories: '130', protein: '2.7', carbs: '28', fat: '0.3', servingName: 'bowl', servingAmount: '185' },
@@ -117,7 +117,7 @@ const log = (i: 0 | 1, quantity: number, unit: 'g' | 'ml' | 'serving') => (s: St
   return { ...s, entries: [...s.entries, entry], rejected: false };
 };
 const ops: Op[] = [
-  { name: 'save0', slot: 0, words: 'save Oats (per 100 g, carbs unknown, fat 0, cup = 40 g, barcode 0070) as food 0', next: save(0, OATS) },
+  { name: 'save0', slot: 0, words: 'save Oats (per 100 g, carbs unknown, fat 0, cup = 40 g, barcode 0036000291452) as food 0', next: save(0, OATS) },
   { name: 'save1', slot: 1, words: 'save Juice (per 100 ml, protein and fat unknown, no serving) as food 1', next: save(1, JUICE) },
   { name: 'edit0Bar', slot: 0, words: 'edit food 0 to Bar (0 kcal, all macros unknown, bar = 60 g)', next: edit(0, BAR) },
   { name: 'edit0OatMilk', slot: 0, words: 'edit food 0 to Oat milk (basis g → ml, no serving)', next: edit(0, OAT_MILK) },

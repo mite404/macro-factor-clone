@@ -66,6 +66,9 @@ Version 3 adds `brand` to each food: the brand a provider reported, such as USDA
   keeps its brand, and edits never change `brand` or the source fields.
 - A USDA import sets `sourceId` to `fdc:` and its FoodData Central id, `sourceName` to `USDA
   FoodData Central`, and `retrievedOn` to the day it was saved.
+- `barcode` keeps the digits as typed, leading zeros included. Lookup compares barcodes as GTINs,
+  so `077034085228` and `0077034085228` find the same food. Restore still accepts any digits, as
+  earlier versions did, so a barcode saved before check digits were validated restores unchanged.
 
 Version 1 and 2 files have no `brand` and restore with `brand: null`. A version 1 or 2 food that
 has one is rejected as an unexpected field. `src/features/backup/backup-v3.json` is the version 3
