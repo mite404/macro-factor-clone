@@ -18,6 +18,7 @@ const storage = 'src/storage/migrations.ts';
 const backup = 'src/features/backup/backup.ts';
 const goals = 'src/features/goals/goals.ts';
 const lookup = 'src/features/lookup/lookup.ts';
+const recipes = 'src/features/recipes/recipes.ts';
 
 const mutants: Mutant[] = [
   {
@@ -194,6 +195,34 @@ const mutants: Mutant[] = [
     file: lookup,
     from: "if (usda.kind !== 'not-found' && usda.kind !== 'missing-key') return usda;",
     to: "if (usda.kind !== 'not-found') return usda;",
+  },
+  {
+    property: 'H1 history-snapshot',
+    why: 'a recipe portion divides by raw ingredient weight instead of finished weight',
+    file: recipes,
+    from: '(v * grams) / recipe.finishedGrams',
+    to: '(v * grams) / recipe.ingredients.reduce((sum, i) => sum + i.grams, 0)',
+  },
+  {
+    property: 'R1 recipe-snapshot',
+    why: 'listing recipes reads live food values instead of the ingredient snapshot',
+    file: recipes,
+    from: '`SELECT ${ingredientColumns} FROM recipe_ingredients ORDER BY id`',
+    to: '`SELECT i.recipe_id AS recipeId, i.food_id AS foodId, i.name, i.grams, i.servings, i.serving_name AS servingName, f.calories, f.protein, f.carbs, f.fat FROM recipe_ingredients i JOIN foods f ON f.id = i.food_id ORDER BY i.id`',
+  },
+  {
+    property: 'R1 recipe-snapshot',
+    why: 'restore drops recipe ingredients',
+    file: backup,
+    from: '    for (const i of backup.recipeIngredients) {',
+    to: '    for (const i of backup.recipeIngredients.slice(1)) {',
+  },
+  {
+    property: 'H2 unknown-stays-unknown',
+    why: 'a recipe treats an unknown ingredient nutrient as 0',
+    file: recipes,
+    from: "(ingredients.some((i) => i[key] === null)\n    ? null : ",
+    to: "(false\n    ? null : ",
   },
   {
     property: 'X0 no-error',
