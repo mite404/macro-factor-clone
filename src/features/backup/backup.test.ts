@@ -95,6 +95,10 @@ test('rejects unreadable, future, and inconsistent backups with a reason', () =>
     ['non-digit barcode', withFood({ barcode: '12a' }), /Food 1 has an invalid value for barcode/],
     ['missing field', withFood({ archived: undefined }), /Food 1 has an invalid value for archived/],
     ['unexpected field', withFood({ password: 'x' }), /Food 1 has an unexpected field "password"/],
+    // JSON.parse makes these own keys; an `in` check would mistake them for inherited schema fields.
+    ['inherited name constructor', withFood({ constructor: 1 }), /Food 1 has an unexpected field "constructor"/],
+    ['inherited name toString', withEntry({ toString: 'x' }), /Diary entry 9 has an unexpected field "toString"/],
+    ['inherited name __proto__', withFood(JSON.parse('{"__proto__": {}}')), /Food 1 has an unexpected field "__proto__"/],
   ];
   for (const [name, value, reason] of cases) assert.match(rejected(value), reason, name);
   assert.match(rejected(' '.repeat(MAX_BACKUP_BYTES + 1)), /larger than 20 MB/);

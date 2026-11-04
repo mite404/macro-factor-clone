@@ -89,7 +89,7 @@ function recordError(name: string, records: unknown[], fields: Record<string, Ch
   for (const [index, record] of records.entries()) {
     if (!isObject(record)) return `${name} #${index + 1} is not a record`;
     const which = id(record.id) ? `${name} ${record.id}` : `${name} #${index + 1}`;
-    const extra = Object.keys(record).find((key) => !(key in fields));
+    const extra = Object.keys(record).find((key) => !Object.hasOwn(fields, key));
     if (extra !== undefined) return `${which} has an unexpected field "${extra}"`;
     const invalid = Object.keys(fields).find((key) => !fields[key](record[key]));
     if (invalid !== undefined) return `${which} has an invalid value for ${invalid}`;
