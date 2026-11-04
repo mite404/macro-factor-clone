@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# npm test uses node:sqlite, which needs Node >=22.18 (package.json engines).
+node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' \
+  || { echo "Node >=22.18 required, found $(node -v)" >&2; exit 1; }
+
+echo "==> npm ci"
+time npm ci --no-audit --no-fund
