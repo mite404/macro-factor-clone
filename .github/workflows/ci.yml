@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
   workflow_dispatch:
@@ -15,6 +16,7 @@ permissions:
 
 jobs:
   check:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -42,6 +44,7 @@ jobs:
       - run: ${{ matrix.run }}
 
   storybook:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Storybook build and browser flows
     runs-on: ubuntu-latest
     timeout-minutes: 15

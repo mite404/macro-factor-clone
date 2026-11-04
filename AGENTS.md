@@ -15,6 +15,20 @@ Before delegating, read `.agents/pstack-models.md`. Its repository-specific assi
 global role defaults for the named work. Read the assigned ticket in `docs/tickets/` and the shared
 verification contract in `docs/implementation-plan.md`.
 
+Each ticket thread owns its independent oracle review. After local checks, create a draft PR;
+CI jobs skip drafts. For Claude Code implementations, the ticket thread starts a separate Amp
+Claude Code reviewer thread pinned to Fable 5.1 at xhigh through the linked Claude subscription.
+Follow the exact route and findings-return protocol in
+[the repository review routing](.agents/pstack-models.md#claude-code-ticket-reviews).
+For Amp-native Dial implementations, retain the existing Review-button workflow instead. The
+Claude-specific route does not apply to them. Record the reviewed head and findings in either case.
+Self-review by the implementation agent is not an oracle review.
+Fix medium-and-higher findings and have the oracle recheck the corrections. Summarize low/minor
+findings for the owner and wait for their decision before continuing. Mark the PR ready only after
+review is complete; this starts its first CI jobs. Do not manually dispatch CI before that review.
+Keep later code changes in draft until their review is complete. The coordinator integrates reviewed
+PRs with passing CI. Record delivery and verification in `docs/implementation-record.md`.
+
 Implement one ticket per thread. Integrate and verify prerequisites before starting dependent work.
 Keep native iOS acceptance separate from browser previews and portable SQLite tests. Linux cannot
 prove iPhone signing, native keyboard layout, VoiceOver, or camera behavior.

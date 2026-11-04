@@ -11,7 +11,9 @@ Use a current supported Node.js LTS release and npm. Install dependencies with `
 
 `npm run lint` runs Oxlint. `npm run typecheck` checks types with the native TypeScript 7
 compiler. GitHub Actions runs both, plus tests, the nutrition history check, the iOS export, and
-the Storybook browser flows, on every pull request ([CI](docs/tickets/13-ci-native-typescript.md)).
+the Storybook browser flows, on non-draft pull requests and pushes to main
+([CI](docs/tickets/13-ci-native-typescript.md)). Each ticket thread creates a draft PR and completes
+its independent oracle review before marking it ready to start CI.
 `npm run export:ios` checks the production iOS JavaScript bundle; it does not compile or sign a
 native app. `npx expo-doctor` checks Expo
 compatibility against network-fetched versions and is not a CI gate.

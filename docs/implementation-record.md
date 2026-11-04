@@ -14,13 +14,83 @@ record does not add those files to Git or turn worker-reported checks into indep
 
 ### Oracle review is required before each upcoming merge
 
-The owner requires an independent oracle code review of each PR before merging, starting with
-ticket 06. Address medium-and-higher findings, rerun affected verification, and have the oracle
-check the corrections against the final head before merging. Summarize low/minor findings for the
-owner and pause for their review before continuing when those findings exist. Do not silently
-implement or dismiss them. This gate overrides the previous unattended merge flow. The ticket 06
-worker has been informed; the coordinator arranges the review. Tickets 03–05 were already merged
-before this requirement; no retrospective review is implied.
+The owner requires an independent oracle code review of each PR before merging. They subsequently
+clarified that the implementation thread owns this review, after creating its PR and before its
+first CI jobs run. The coordinator no longer arranges reviews for other ticket threads. The
+publication sequence and severity rules are in [repository guidance](../AGENTS.md).
+
+The local CI change skips draft-PR jobs and starts them on `ready_for_review`. It preserves checks
+for non-draft updates and main pushes. Until that workflow change is published, opening a draft PR
+under the old workflow can still run CI. Ticket 06's worker received the new ownership instruction.
+Tickets 03–05 were merged before the review requirement; no retrospective review is implied.
+
+The independent oracle reviewed the local draft-PR gate and guidance changes. No medium-or-higher
+findings were reported. One low finding awaits the owner: clarify that integration requires all six
+expected checks to have executed successfully for the reviewed head. Skipped draft jobs can report
+success, so a green aggregate alone is insufficient. This clarification has not been applied.
+Local YAML/expression checks passed ten event cases for both jobs and confirmed all existing test
+commands remain unchanged. Hosted draft-to-ready behavior has not yet been exercised.
+
+The owner subsequently requested Fable at xhigh for Claude Code ticket reviews, independent of the
+Opus 5.5 medium implementation. The local [review route](../.agents/pstack-models.md) now pins a
+separate Claude Code thread and requires findings plus exact reviewed head to return to the ticket
+thread. Amp-native Dial threads keep the Review-button workflow. Official Amp and Claude docs
+confirm the feature spelling and model support. No live Fable invocation, included-plan entitlement,
+or effective runtime effort was verified. The account setting reads `subscription-only`; Fable
+extra-usage eligibility still needs checking before launch. No model substitution is authorized.
+
+### Method audit of tickets 03–06
+
+The coordinator read the four implementation-thread histories and inspected current goals, lookup,
+backup, and diary orchestration code. This audit found inconsistent red-green TDD, not consistent
+test-first development. A failing behavioral test must run before its implementation to count as
+test-first. Removing an implemented module or mutating completed code is not that initial red step.
+
+| Ticket | Observed test chronology |
+| --- | --- |
+| [03][backup-thread] | Tests written first but first run after implementation; later restore-race correction did run red before the fix. |
+| [04][targets-thread] | Goals lacked an initial behavioral red; backup v2 had a real pre-implementation red. |
+| [05][lookup-thread] | GTIN/USDA and backup v3 implementation preceded their tests. Later mutations checked sensitivity, not test-first chronology. |
+| [06][off-thread] | OFF and its oracle corrections were implementation-first; regressions were subsequently run against unfixed code. |
+
+The inspected code uses pure parsers/calculations and fresh-object transformations. For example,
+`Diary.tsx` replaces nested forms with spreads. `parseBackup` maps foods into new objects.
+Goals places types and calculations before database actions. Lookup places types/parsers before
+HTTP and local-first orchestration. Ordering is not universal: backup's pure `summarize` follows
+the effectful `exportBackup`, and lookup's pure `parsed` helper follows `get`.
+
+Effects are explicit in database parameters and network adapters, but clocks, timers and React refs
+remain stateful. Mutation of fresh local accumulators does not mutate caller-owned values. This is
+functional-core style, not pervasive immutability or strict separation into four files.
+The ticket 06 worker was reminded to run the red test before implementing future corrections.
+
+### Repository record publication
+
+The record migration shipped to main as [5bc691a][record-commit]. An independent oracle found no
+actionable defects in the two documentation files. Local lint, typecheck, `npm test` (34 passed),
+the depth-4 nutrition check (44,956 sequences), iOS JavaScript export, Storybook build and browser
+checks (36 stories) passed before the push.
+
+The first push was rejected because main had advanced to `350327a`. The documentation commit was
+rebased without conflicts; its two-file content remained identical to the reviewed version. Per the
+owner's instruction, the suite was not repeated after this later rebase. These results therefore
+do not independently verify the newly fetched upstream fixes. The GitHub completion event for
+[run 41775963291](https://github.com/mite404/macro-factor-clone/actions/runs/41775963291)
+subsequently reported all six checks successful on the exact pushed head. This is not native iOS
+acceptance.
+This checkpoint predates publication of the review-ownership, draft-CI gate and method-audit changes.
+
+### Ticket 06 correction handoff remains unpublished
+
+The [ticket 06 worker][off-thread] reports local head
+`48b376ee116713a9aa9915642d15d75864aee681`, with fixes for modified nutrient values, total-carb
+semantics, and the shared OFF request gate. Its reported checks pass, including 35 unit tests,
+36 browser stories, 26 caught mutants, and depth-5 history coverage. The coordinator has not
+imported these commits or independently rerun those checks.
+
+The worker's generic read-only subagent review does not meet the newly requested Fable/xhigh route.
+Two low findings await the owner: wall-clock rollback can leave the OFF gate busy, and the earlier
+missing-protein wording. Publication remains unauthorized; no correction push is implied here.
 
 ### Approved dark lookup flow
 
@@ -442,6 +512,12 @@ No merges are authorized by this record. No native build has been verified by th
 [ui-thread]: https://ampcode.com/threads/T-f3543611-9f9b-44f2-8037-090845203361
 [history-thread]: https://ampcode.com/threads/T-01a1a39d-c369-77ac-9a80-b1993d5d057a
 [ci-thread]: https://ampcode.com/threads/T-118f58c0-7f55-46e6-9d1f-83d662f2b3dc
+[backup-thread]: https://ampcode.com/threads/T-92446160-d0c9-4113-8d29-e772c221d832
+[targets-thread]: https://ampcode.com/threads/T-726bca15-3a60-4507-a2a7-e12b1b49595e
+[lookup-thread]: https://ampcode.com/threads/T-68986624-b1ed-44fc-be7b-6ae0d6bed2eb
+[off-thread]: https://ampcode.com/threads/T-fc6d0b84-ec13-47c8-8b1f-26a2caab882f
+[record-commit]:
+  https://github.com/mite404/macro-factor-clone/commit/5bc691abed14bfc84c61aa3eb670eea07e2b35f1
 [off-aggregation]:
   https://github.com/openfoodfacts/openfoodfacts-server/tree/d4e3cd4/lib/ProductOpener
 [off-carbs]:
