@@ -37,7 +37,7 @@ export function Scanner({ onScan, onCancel }: { onScan: (code: string) => void; 
   }, [permission, request, asked]);
   // The hook reads permission only on mount; access may change in Settings while the app is away.
   useEffect(() => {
-    const sub = AppState.addEventListener('change', state => state === 'active' && reread());
+    const sub = AppState.addEventListener('change', state => state === 'active' && reread().catch(() => {}));
     return () => sub.remove();
   }, [reread]);
 
@@ -68,8 +68,9 @@ export function Scanner({ onScan, onCancel }: { onScan: (code: string) => void; 
         }} /> : null}
     </View>
     <Row style={{ gap: 8 }}>
+      {/* Nothing invites scanning before access is granted, as while the iOS prompt is open. */}
       <Label size={12} muted style={{ flex: 1 }} accessibilityLiveRegion="polite">
-        Hold the barcode inside the square. If it won't read, type the digits below.
+        {permission?.granted ? "Hold the barcode inside the square. If it won't read, type the digits below." : ''}
       </Label>
       {cancel}
     </Row>
