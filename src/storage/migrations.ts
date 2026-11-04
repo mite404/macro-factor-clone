@@ -68,6 +68,15 @@ export const migrations = [
     CHECK ((servings IS NULL) = (serving_name IS NULL))
   );
   CREATE INDEX recipe_ingredients_recipe ON recipe_ingredients (recipe_id);`,
+  // One weigh-in per local calendar day, in kilograms. preferences has at most one row; none = kg.
+  `CREATE TABLE weights (
+    day TEXT PRIMARY KEY CHECK (day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    kg REAL NOT NULL CHECK (kg > 0)
+  );
+  CREATE TABLE preferences (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    weight_unit TEXT NOT NULL CHECK (weight_unit IN ('kg', 'lb'))
+  );`,
 ];
 
 /**
