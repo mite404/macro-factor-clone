@@ -27,12 +27,12 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON .agents/skills/verifying-nut
 ```
 
 The default depth is 4: 44,956 sequences, about 135 s. Before moving the sync commit, also run
-`--depth 5`: 609,320 sequences, about 37 min. Exit 0 prints `PASS`. Exit 1 prints
+`--depth 5`: 609,320 sequences, about 36 min. Exit 0 prints `PASS`. Exit 1 prints
 `FAIL <property>` with a shortest counterexample as numbered steps and the expected and actual
 rows.
 
 To prove the check can still fail, run `scripts/mutants.ts` the same way. It needs a clean `src/`.
-It applies 25 real breakages one at a time and restores each file. Every line must read
+It applies 26 real breakages one at a time and restores each file. Every line must read
 `CAUGHT`. It then confirms the baseline passes and `src/` is clean.
 
 ## Properties
@@ -51,7 +51,8 @@ The harm in every case is a diary that silently changes or misreports what the o
 - **F1 food-record-fidelity.** `searchFoods` returns exactly the last-saved food, including `null`
   nutrients, serving, basis, barcode leading zeros, and an import's brand and source. Edits keep
   the brand and source. A USDA import saves the record whose own GTIN matches, not the top one.
-  An Open Food Facts import keeps a macro unknown when only another record in the reply lists it.
+  An Open Food Facts import keeps a macro unknown when only another record in the reply lists it,
+  and saves total carbohydrate, not net.
 - **F2 archive-hides-only.** Archived foods never appear in search. Archiving changes nothing else.
 - **F3 archived-food-kept.** An archived food stays stored as last saved, read with SQL, including
   through a backup round trip.
@@ -112,7 +113,7 @@ The harm in every case is a diary that silently changes or misreports what the o
 
 ## Coverage record
 
-Sync commit: `e54d5ba3e4289d7c4e12150b617775b4484f5623`. Tools: Node v26.12.1 with built-in
+Sync commit: `8232d0c6c7698631cf2cb464e4ed4b07518f5a5e`. Tools: Node v26.12.1 with built-in
 `node:sqlite` (SQLite 3.54.0), running `.ts` files by type stripping. The repo requires
 Node ≥ 22.18.
 
@@ -133,7 +134,7 @@ Node ≥ 22.18.
 1. Find out whether a change touches covered code:
 
    ```sh
-   git diff --stat e54d5ba3e4289d7c4e12150b617775b4484f5623 -- \
+   git diff --stat 8232d0c6c7698631cf2cb464e4ed4b07518f5a5e -- \
      src/features/foods/foods.ts src/features/diary/diary.ts src/features/goals/goals.ts \
      src/features/backup/backup.ts src/features/lookup/lookup.ts src/storage/
    ```

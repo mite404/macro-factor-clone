@@ -66,8 +66,8 @@ adds dependencies and needs the owner's approval.
 | `UsdaKeySettings` | Blank and malformed keys rejected, key saved masked and never shown, then removed |
 | `BarcodeLargeText` | At 1.5× text the USDA review keeps every figure whole and scrolls clear of Save food |
 | `BarcodeOffFallbackSaveOffline` | USDA miss falls back to Open Food Facts; review, license link, save, log 20 g, repeat lookup offline |
-| `BarcodeUsdaLimitOffersOff` | USDA 429 asks nothing else; Try Open Food Facts, its 503, then Try again asks only Open Food Facts |
-| `BarcodeOffLargeText` | No key: Open Food Facts directly; unknown protein and fat stay "?"; 1.5× text keeps figures whole |
+| `BarcodeUsdaLimitOffersOff` | USDA 429 asks nothing else; Try Open Food Facts, its 503, then Try again sends nothing during the cooldown |
+| `BarcodeOffLargeText` | No key: Open Food Facts directly; unknown protein, fat, and net-only carbs stay "?"; 1.5× text keeps figures whole |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |
 
 Barcode stories stub `window.fetch` for `api.nal.usda.gov` and `world.openfoodfacts.org` with

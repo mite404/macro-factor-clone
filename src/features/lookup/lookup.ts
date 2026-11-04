@@ -36,13 +36,17 @@ const OFF_URL = 'https://world.openfoodfacts.org/api/v3.5/product/';
 const OFF_FIELDS = 'code,product_name,brands,serving_quantity,serving_quantity_unit,nutrition.aggregated_set,schema_version';
 const OFF_SCHEMA = 1003;
 // Per nutrient: FDC id, Open Food Facts id, the unit each must be reported in, and the most
-// 100 g or 100 ml can hold.
+// 100 g or 100 ml can hold. Carbs are total carbohydrate, fiber included, as USDA's 1005 is. OFF's
+// `carbohydrates` is net of fiber by its schema, yet its Kar's record copies USDA's total there,
+// so net plus fiber could count fiber twice: without `carbohydrates-total`, carbs stay unknown.
 const NUTRIENTS = {
   calories: { id: 1008, off: 'energy-kcal', unit: 'KCAL', max: 900 },
   protein: { id: 1003, off: 'proteins', unit: 'G', max: 100 },
   fat: { id: 1004, off: 'fat', unit: 'G', max: 100 },
-  carbs: { id: 1005, off: 'carbohydrates', unit: 'G', max: 100 },
+  carbs: { id: 1005, off: 'carbohydrates-total', unit: 'G', max: 100 },
 } as const;
+// Open Food Facts reads products at 15 a minute per user; after a throttled reply, wait a minute.
+const OFF_LIMIT = { reads: 15, windowMs: 60_000 };
 type NutrientSpec = (typeof NUTRIENTS)[keyof typeof NUTRIENTS];
 // Branded nutrients are per 100 of the unit the label's serving was given in.
 const BASIS: Record<string, Unit> = { G: 'g', GRM: 'g', ML: 'ml', MLT: 'ml' };
@@ -121,12 +125,16 @@ export function parseOffProduct(json: unknown, gtin: Gtin, digits: string, retri
   const found = isObject(set) && isObject(set.nutrients) ? set.nutrients : {};
   const energy = found[NUTRIENTS.calories.off];
   const name = text(product.product_name);
-  if (!basis || !name || !isObject(energy) || !Number.isInteger(energy.source_index) || energy.source === 'estimate') {
+  // A modifier marks a bound such as "<0.5" or "~", which OFF also sets when it fills a value it
+  // computed: calories must be an entered label value.
+  if (!basis || !name || !isObject(energy) || !Number.isInteger(energy.source_index) || energy.source === 'estimate' ||
+    energy.modifier !== undefined) {
     return { kind: 'invalid-nutrition' };
   }
   const [calories, protein, fat, carbs] = Object.values(NUTRIENTS).map((spec) => {
     const n = found[spec.off];
-    if (!isObject(n) || n.source_index !== energy.source_index) return null;
+    // A bounded or approximate macro cannot be stored as an exact gram value, so it stays unknown.
+    if (!isObject(n) || n.source_index !== energy.source_index || n.modifier !== undefined) return null;
     return usable(n.value, n.unit, spec) ? (n.value as number) : undefined;
   });
   if (calories == null || [protein, fat, carbs].includes(undefined)) return { kind: 'invalid-nutrition' };
@@ -186,13 +194,34 @@ async function searchUsda(gtin: Gtin, digits: string, key: string, request: type
   return parsed(reply.body, (json) => parseUsdaSearch(json, gtin, digits, localDay()));
 }
 
+// Start times of recent Open Food Facts reads, and when a throttled reply's cooldown ends, per
+// request function. The app always passes the global fetch, so every lookup shares one gate;
+// tests pass their own function and get their own gate.
+const offGates = new WeakMap<typeof fetch, { reads: number[]; until: number }>();
+
+// Admits a read, or refuses it with no request when the minute's reads are used or a cooldown runs.
+function admitOff(request: typeof fetch): boolean {
+  const now = Date.now();
+  const gate = offGates.get(request) ?? { reads: [], until: 0 };
+  offGates.set(request, gate);
+  // A clock moved back makes reads and cooldowns look like the future; forget them, so the gate
+  // only ever waits out at most one window.
+  gate.reads = gate.reads.filter((t) => t <= now && now - t < OFF_LIMIT.windowMs);
+  if (gate.until - now > OFF_LIMIT.windowMs) gate.until = 0;
+  if (now < gate.until || gate.reads.length >= OFF_LIMIT.reads) return false;
+  gate.reads.push(now);
+  return true;
+}
+
 async function searchOff(gtin: Gtin, digits: string, request: typeof fetch): Promise<OffResult> {
-  // ponytail: one request per tap stays well under OFF's 15 product reads a minute per user; add a
-  // client-side limiter if anything ever looks codes up without a tap.
+  if (!admitOff(request)) return { kind: 'rate-limited' };
   const reply = await get(`${OFF_URL}${digits}?fields=${OFF_FIELDS}`, { 'User-Agent': USER_AGENT }, request);
   if ('kind' in reply) return reply;
   // 503 is OFF's global rate limit as well as maintenance.
-  if (reply.status === 429 || reply.status === 503) return { kind: 'rate-limited' };
+  if (reply.status === 429 || reply.status === 503) {
+    offGates.get(request)!.until = Date.now() + OFF_LIMIT.windowMs;
+    return { kind: 'rate-limited' };
+  }
   if (!reply.ok && reply.status !== 404) return { kind: 'bad-response' };
   const result = parsed(reply.body, (json) => parseOffProduct(json, gtin, digits, localDay()));
   return reply.status === 404 && result.kind !== 'not-found' ? { kind: 'bad-response' } : result;
