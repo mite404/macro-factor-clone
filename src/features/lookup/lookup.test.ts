@@ -65,9 +65,9 @@ test('validates check digits and pads every GTIN length to the same 14 digits', 
 });
 
 test('expands a scanned UPC-E to the UPC-A its check digit belongs to', () => {
-  // Each last-digit rule (0-2, 3, 4, 5-9) and the 2/3 boundary. 04963406 is the Coca-Cola can example.
+  // Each last-digit rule (0-2, 3, 4, 5-9), the 2/3 boundary, and number system 1. 04963406 is the Coca-Cola can example.
   for (const [upcE, upcA] of [['04963406', '049000006346'], ['01234514', '012100003454'], ['01234523', '012200003453'], ['01234531', '012300000451'],
-    ['01234543', '012340000053'], ['01234565', '012345000065']]) {
+    ['01234543', '012340000053'], ['01234565', '012345000065'], ['11234562', '112345000062']]) {
     assert.equal(expandUpcE(upcE), upcA);
     assert.ok('gtin' in parseGtin(expandUpcE(upcE)), upcE);
   }
