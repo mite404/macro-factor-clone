@@ -3,7 +3,7 @@
 // on return, so a closed scanner never restarts. Frames are read, never stored.
 import { CameraView, useCameraPermissions, type BarcodeType } from 'expo-camera';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Linking, View } from 'react-native';
+import { AppState, Linking, View } from 'react-native';
 
 import { Button, Label, Row, usePalette } from '../../ui';
 import { expandUpcE } from '../foods/foods';
@@ -24,7 +24,7 @@ function Message({ title, text, children }: { title: string; text: string; child
 /** Asks for camera access when opened, then reports the first barcode it reads, once per opening. */
 export function Scanner({ onScan, onCancel }: { onScan: (code: string) => void; onCancel: () => void }) {
   const p = usePalette();
-  const [permission, request] = useCameraPermissions();
+  const [permission, request, reread] = useCameraPermissions();
   const [failed, setFailed] = useState(false);
   // The camera calls back for every frame that shows the code, before the tab can unmount it.
   const scanned = useRef(false);
@@ -35,6 +35,11 @@ export function Scanner({ onScan, onCancel }: { onScan: (code: string) => void; 
     setAsked(true);
     request();
   }, [permission, request, asked]);
+  // The hook reads permission only on mount; access may change in Settings while the app is away.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => state === 'active' && reread());
+    return () => sub.remove();
+  }, [reread]);
 
   const cancel = <Button onPress={onCancel}>Cancel</Button>;
   if (failed) return <Message title="The camera couldn't start"
