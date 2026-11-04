@@ -9,8 +9,12 @@ Use a current supported Node.js LTS release and npm. Install dependencies with `
 `npm start` for Metro, or `npm run ios` to open Expo in an available iOS Simulator on a Mac. See
 [iOS builds](docs/ios-builds.md) for standalone builds and free personal iPhone installation.
 
-`npm run typecheck` checks TypeScript. `npm run export:ios` checks the production iOS JavaScript
-bundle; it does not compile or sign a native app. `npx expo-doctor` checks Expo compatibility.
+`npm run lint` runs Oxlint. `npm run typecheck` checks types with the native TypeScript 7
+compiler. GitHub Actions runs both, plus tests, the nutrition history check, the iOS export, and
+the Storybook browser flows, on every pull request ([CI](docs/tickets/13-ci-native-typescript.md)).
+`npm run export:ios` checks the production iOS JavaScript bundle; it does not compile or sign a
+native app. `npx expo-doctor` checks Expo
+compatibility against network-fetched versions and is not a CI gate.
 `npm test` runs behavioral tests with Node's built-in test runner and SQLite (Node 22.18 or later).
 `npm run web` previews layout in a browser; it does not prove native SQLite or keyboard behavior.
 
