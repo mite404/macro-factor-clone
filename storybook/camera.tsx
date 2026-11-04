@@ -20,7 +20,12 @@ export function useCameraPermissions() {
     setState(next);
     return next;
   }, []);
-  return [state, request] as const;
+  const get = useCallback(async () => {
+    const next = permission(camera.status);
+    setState(next);
+    return next;
+  }, []);
+  return [state, request, get] as const;
 }
 
 export function CameraView({ onBarcodeScanned, onMountError, style }: ViewProps & {

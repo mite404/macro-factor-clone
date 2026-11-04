@@ -69,7 +69,7 @@ adds dependencies and needs the owner's approval.
 | `BarcodeUsdaLimitOffersOff` | USDA 429 asks nothing else; Try Open Food Facts, its 503, then Try again asks only Open Food Facts |
 | `BarcodeOffLargeText` | No key: Open Food Facts directly; unknown protein and fat stay "?"; 1.5× text keeps figures whole |
 | `BarcodeScanOnceAndRescan` | One permission request; three repeated detections make one lookup; an explicit rescan makes one more |
-| `BarcodeScanDeniedTypeUnknown` | Denied camera offers Settings; a typed unknown code reaches Create food with the barcode filled in |
+| `BarcodeScanDeniedTypeUnknown` | Denied camera offers Settings, re-reads access on return; a typed unknown code reaches Create food |
 | `BarcodeScanPromptOpen` | While the iOS prompt is open the scanner waits behind it, not reporting access off |
 | `BarcodeScanMountErrors` | A recovered media reset keeps the camera open; another mount error reports a failed start |
 | `Design references/*` | Each of the 11 unbuilt-feature studies renders without errors |

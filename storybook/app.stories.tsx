@@ -720,7 +720,7 @@ export const BarcodeScanOnceAndRescan: Story = {
   },
 };
 
-// Denied: Settings is offered, and a typed unknown product still reaches manual creation.
+// Denied: Settings is offered and re-read on return, and a typed unknown product reaches Create food.
 export const BarcodeScanDeniedTypeUnknown: Story = {
   args: {
     onInit: async () => {
@@ -734,6 +734,11 @@ export const BarcodeScanDeniedTypeUnknown: Story = {
     await userEvent.click(await canvas.findByRole('button', { name: 'Scan a barcode' }));
     await expect(await canvas.findByText('Camera access is off')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'Open Settings' })).toBeVisible();
+    // Access turned on in Settings: returning to the app re-reads it and opens the camera.
+    camera.status = 'granted';
+    document.dispatchEvent(new Event('visibilitychange'));
+    await expect(await canvas.findByText(/Hold the barcode inside the square/)).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Cancel' }));
     await lookUp(canvas, '0000000000017');
     await expect(await canvas.findByText('Not in Open Food Facts')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Create food' }));
