@@ -1,10 +1,10 @@
 // The logger's Barcode tab (typed codes; the camera comes in ticket 07) and the USDA record review.
-// Both follow the logger they open from: FoodSearch's dark ribbon, footer field, and result rows, and
-// FoodDetail's light name, macro summary, and per-100 line.
+// Both share the dark logger sheet with FoodSearch and FoodDetail: ribbon header, one body surface,
+// a pinned footer for the primary action, and FoodDetail's title, macro summary, and facts card.
 import { ActivityIndicator, TextInput, View } from 'react-native';
 
-import { Button, Card, Label, Macros, palettes, Phone, Row, usePalette } from '../../ui';
-import { Chevron, describe, FoodRow, LoggerHeader, round, servingText, type LoggerTab } from '../diary/LoggingScreens';
+import { Button, Label, Macros, palettes, Phone, Row, usePalette } from '../../ui';
+import { describe, FoodFacts, FoodRow, FoodTitle, LoggerBody, LoggerFooter, LoggerHeader, round, type LoggerTab } from '../diary/LoggingScreens';
 import type { Food } from '../foods/foods';
 import type { Lookup, UsdaFood } from './lookup';
 
@@ -88,6 +88,7 @@ export function BarcodeLookup({ summary, code, result, looking, failure, onCode,
   const p = palettes.dark;
   const error = result?.kind === 'invalid' ? result.error : failure;
   return <Phone dark header={<LoggerHeader active="Barcode" summary={summary} onClose={onClose} onTab={onTab} />}
+    // The same pill footer as FoodSearch, so switching tabs never moves the field.
     footer={<View style={{ padding: 12, gap: 8, backgroundColor: p.surface }}>
       {error ? <Label accessibilityRole="alert" size={12} style={{ color: p.danger, paddingHorizontal: 15 }}>{error}</Label> : null}
       <Row style={{ gap: 8 }}>
@@ -98,51 +99,34 @@ export function BarcodeLookup({ summary, code, result, looking, failure, onCode,
         <Button primary label="Look up barcode" disabled={looking} onPress={onLookUp}>Look up</Button>
       </Row>
     </View>}>
-    <View style={{ padding: 16, backgroundColor: p.surface, flexGrow: 1 }}>
+    <LoggerBody>
       <Result result={result} looking={looking} onFood={onFood} onUsda={onUsda} onRetry={onLookUp} onKey={onKey} onCreate={onCreate} />
-    </View>
+    </LoggerBody>
   </Phone>;
-}
-
-// One labelled value in the provenance card, divided like the targets card rows.
-function Fact({ name, value, first = false }: { name: string; value: string; first?: boolean }) {
-  const p = usePalette();
-  return <Row style={{ gap: 12, alignItems: 'flex-start', paddingVertical: 10, borderTopWidth: first ? 0 : 1, borderColor: p.border }}>
-    <Label size={12} muted style={{ flex: 1 }}>{name}</Label>
-    <Label size={12} style={{ flex: 2, textAlign: 'right' }}>{value}</Label>
-  </Row>;
 }
 
 /** A USDA record, inspected before anything is saved. Unknown nutrients stay unknown, never 0. */
 export function UsdaReview({ summary, food, error, onSave, onBack, onClose }: {
   summary: string; food: UsdaFood; error: string; onSave: () => void; onBack: () => void; onClose: () => void;
 }) {
-  const p = palettes.light;
+  const p = palettes.dark;
   const unknown = (['protein', 'fat', 'carbs'] as const).filter(key => food[key] === null);
   const value = (n: number | null) => (n === null ? '?' : `${round(n)}`);
-  return <Phone header={<LoggerHeader summary={summary} onClose={onClose} />} footer={<View style={{ padding: 10, gap: 6 }}>
-    <Label size={12} muted style={{ paddingHorizontal: 8 }}>Nothing is saved until you tap Save food.</Label>
-    <Row style={{ justifyContent: 'flex-end' }}>
+  return <Phone dark header={<LoggerHeader summary={summary} onClose={onClose} />} footer={<LoggerFooter>
+    <Row style={{ gap: 8 }}>
+      <Label size={12} muted style={{ flex: 1 }}>Nothing is saved until you tap Save food.</Label>
       <Button primary hint="Keeps it on this phone for offline logging" onPress={onSave}>Save food</Button>
     </Row>
-  </View>}>
-    <View style={{ padding: 18, gap: 16, backgroundColor: p.surface }}>
-      <Row style={{ gap: 8 }}><Chevron label="Back to barcode results" onPress={onBack}>‹</Chevron>
-        <View style={{ flex: 1 }}><Label accessibilityRole="header" size={13}>{food.name}</Label>
-          {food.brand ? <Label size={11} muted>{food.brand}</Label> : null}</View></Row>
+  </LoggerFooter>}>
+    <LoggerBody>
+      <FoodTitle food={food} backLabel="Back to barcode results" onBack={onBack} />
       <Macros values={[`${round(food.calories)}`, value(food.protein), value(food.fat), value(food.carbs)]} />
       <Label size={12} muted>Per 100 {food.basis}: {describe(food)}</Label>
       {unknown.length > 0 ? <Label size={12} style={{ color: p.warning }}>
         USDA lists no {unknown.join(' or ')}. It stays unknown in your log, not 0.
       </Label> : null}
-      <Card style={{ paddingVertical: 4, gap: 0, borderWidth: 1, borderColor: p.border }}>
-        <Fact first name="Barcode" value={food.barcode!} />
-        <Fact name="Serving" value={food.serving ? servingText(food) : 'None listed'} />
-        <Fact name="Source" value={food.source.name} />
-        <Fact name="Record" value={record(food).replace('USDA record ', '')} />
-        <Fact name="Retrieved" value={food.source.retrievedOn} />
-      </Card>
+      <FoodFacts food={food} published={food.published} saved="Retrieved" />
       {error ? <Label accessibilityRole="alert" size={12} style={{ color: p.danger }}>{error}</Label> : null}
-    </View>
+    </LoggerBody>
   </Phone>;
 }

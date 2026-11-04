@@ -442,7 +442,10 @@ export const BarcodeSavedFoodOffline: Story = {
     await expect(canvas.getByText('Found on this phone, so nothing was sent to USDA.')).toBeVisible();
     await expect(usdaCalls).toEqual([]);
     await userEvent.click(canvas.getByRole('button', { name: "NUT 'N BERRY MIX, KAR'S, 500 kilocalories per 100 g" }));
-    await expect(await canvas.findByText('From USDA FoodData Central, record 2105222, saved 2026-11-03. Edits change only this saved copy.')).toBeVisible();
+    await expect(await canvas.findByText('Edits change only this saved copy, not past diary entries.')).toBeVisible();
+    await expect(canvas.getByText('USDA FoodData Central')).toBeVisible();
+    await expect(canvas.getByText('2026-11-03')).toBeVisible();
+    await expect(canvas.getByText('077034085228')).toBeVisible();
   },
 };
 

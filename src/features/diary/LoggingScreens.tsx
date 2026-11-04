@@ -3,6 +3,7 @@
 // the illustrated keypad, the hour column (entries carry no time), and tabs or buttons for
 // features that do not exist yet (camera Scan, AI, Library, Plate, Favorite, Impact on Targets). The
 // Barcode tab stands where the original's Scan tab is, for typed codes until the camera lands.
+import type { ReactNode } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { Button, Card, Field, Label, Macros, palettes, Phone, Row, SearchBar, Segments, usePalette } from '../../ui';
@@ -277,39 +278,81 @@ function QuickAddBody({ form, errors, saveError, correcting, portion, onField }:
     </View>;
 }
 
+/** The logger's scrolling content: one surface from the header down to the footer. */
+export function LoggerBody({ children }: { children: ReactNode }) {
+  const p = usePalette();
+  return <View style={{ padding: 16, gap: 16, backgroundColor: p.surface, flexGrow: 1 }}>{children}</View>;
+}
+
+/**
+ * The detail screens' pinned footer, on the body's surface so no band shows between them, and
+ * inset like the body so fields line up with the text above.
+ */
+export function LoggerFooter({ children }: { children: ReactNode }) {
+  const p = usePalette();
+  return <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8, backgroundColor: p.surface }}>{children}</View>;
+}
+
+/** Back arrow, food name, and brand, as the food detail and the USDA review title them. */
+export function FoodTitle({ food, backLabel, onBack }: { food: FoodInput & Provenance; backLabel: string; onBack: () => void }) {
+  return <Row style={{ gap: 8 }}><Chevron label={backLabel} onPress={onBack}>‹</Chevron>
+    <View style={{ flex: 1 }}><Label accessibilityRole="header" size={13}>{food.name}</Label>
+      {food.brand ? <Label size={11} muted>{food.brand}</Label> : null}</View></Row>;
+}
+
+// One labelled value in a food's facts card, divided like the targets card rows.
+function Fact({ name, value, first = false }: { name: string; value: string; first?: boolean }) {
+  const p = usePalette();
+  return <Row style={{ gap: 12, alignItems: 'flex-start', paddingVertical: 10, borderTopWidth: first ? 0 : 1, borderColor: p.border }}>
+    <Label size={12} muted style={{ flex: 1 }}>{name}</Label>
+    <Label size={12} style={{ flex: 2, textAlign: 'right' }}>{value}</Label>
+  </Row>;
+}
+
+/** Barcode, serving, and where an imported food came from. `published` is the provider's record date. */
+export function FoodFacts({ food, published, saved }: { food: FoodInput & Provenance; published?: string | null; saved: string }) {
+  const p = usePalette();
+  const record = food.source ? `${food.source.id.replace('fdc:', '')}${published ? `, published ${published}` : ''}` : null;
+  return <Card style={{ paddingVertical: 4, gap: 0, borderWidth: 1, borderColor: p.border }}>
+    {[
+      food.barcode ? ['Barcode', food.barcode] : null,
+      ['Serving', food.serving ? servingText(food) : 'None listed'],
+      food.source ? ['Source', food.source.name] : null,
+      record ? ['Record', record] : null,
+      food.source ? [saved, food.source.retrievedOn] : null,
+    ].filter(row => row !== null).map(([name, value], i) => <Fact key={name} first={i === 0} name={name} value={value} />)}
+  </Card>;
+}
+
 /** A saved food's portion: nutrition for the entered amount in its basis unit or its serving. */
 export function FoodDetail({ summary, food, quantity, unit, preview, error, onQuantity, onUnit, onAdd, onBack, onEdit, onClose }: {
   summary: string; food: Food; quantity: string; unit: Unit | 'serving'; preview: { nutrition: Nutrition; portion: Portion } | null;
   error: string; onQuantity: (text: string) => void; onUnit: (unit: Unit | 'serving') => void; onAdd: () => void;
   onBack: () => void; onEdit: () => void; onClose: () => void;
 }) {
-  const p = palettes.light;
   const shown = preview?.nutrition ?? food;
   const units = food.serving ? [food.basis, food.serving.name] : null;
-  return <Phone header={<LoggerHeader summary={summary} onClose={onClose} />} footer={<>
-    <View style={{ paddingHorizontal: 18, gap: 8 }}>
-      <Field label={unit === 'serving' ? `Servings of ${servingText(food)}` : 'Portion'}
-        a11y={unit === 'serving' ? 'Number of servings' : `Amount in ${food.basis === 'g' ? 'grams' : 'millilitres'}`}
-        value={quantity} onChangeText={onQuantity} suffix={unit === 'serving' ? food.serving?.name : food.basis}
-        placeholder={unit === 'serving' ? '1' : '100'} keyboardType="decimal-pad" autoFocus error={error || undefined} />
-      {units ? <Segments label="Unit" values={units} selected={unit === 'serving' ? units[1] : units[0]}
+  return <Phone dark header={<LoggerHeader summary={summary} onClose={onClose} />} footer={<LoggerFooter>
+    <Field label={unit === 'serving' ? `Servings of ${servingText(food)}` : 'Portion'}
+      a11y={unit === 'serving' ? 'Number of servings' : `Amount in ${food.basis === 'g' ? 'grams' : 'millilitres'}`}
+      value={quantity} onChangeText={onQuantity} suffix={unit === 'serving' ? food.serving?.name : food.basis}
+      placeholder={unit === 'serving' ? '1' : '100'} keyboardType="decimal-pad" autoFocus error={error || undefined} />
+    <Row style={{ gap: 8 }}>
+      <View style={{ flex: 1 }}>{units ? <Segments label="Unit" values={units} selected={unit === 'serving' ? units[1] : units[0]}
         names={{ [units[0]]: food.basis === 'g' ? 'Grams' : 'Millilitres', [units[1]]: `Servings of ${servingText(food)}` }}
-        onChange={value => onUnit(value === units[0] ? food.basis : 'serving')} /> : null}
-    </View>
-    <Row style={{ justifyContent: 'flex-end', padding: 10, gap: 8 }}>
+        onChange={value => onUnit(value === units[0] ? food.basis : 'serving')} /> : null}</View>
       <Button primary label="Add" onPress={onAdd}>Add</Button>
     </Row>
-  </>}>
-    <View style={{ padding: 18, gap: 16, backgroundColor: p.surface }}>
-      <Row style={{ gap: 8 }}><Chevron label="Back to foods" onPress={onBack}>‹</Chevron>
-        <View style={{ flex: 1 }}><Label accessibilityRole="header" size={13}>{food.name}</Label>
-          {food.brand ? <Label size={11} muted>{food.brand}</Label> : null}</View></Row>
+  </LoggerFooter>}>
+    <LoggerBody>
+      <FoodTitle food={food} backLabel="Back to foods" onBack={onBack} />
       <Macros values={[`${round(shown.calories)}`, grams(shown.protein), grams(shown.fat), grams(shown.carbs)]} />
       {preview ? <Label size={12} accessibilityLiveRegion="polite">{portionText(preview.portion)}: {describe(preview.nutrition)}</Label> : null}
       <Label size={12} muted>Per 100 {food.basis}: {describe(food)}</Label>
-      {food.source ? <Label size={12} muted>From {food.source.name}, record {food.source.id.replace('fdc:', '')}, saved {food.source.retrievedOn}. Edits change only this saved copy.</Label> : null}
+      {food.barcode || food.source ? <FoodFacts food={food} saved="Saved" /> : null}
+      {food.source ? <Label size={12} muted>Edits change only this saved copy, not past diary entries.</Label> : null}
       <Row style={{ gap: 10 }}><Button hint="Changes future logs only" onPress={onEdit}>Edit Food</Button></Row>
-    </View>
+    </LoggerBody>
   </Phone>;
 }
 
