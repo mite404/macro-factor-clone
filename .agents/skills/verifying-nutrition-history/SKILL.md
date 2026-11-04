@@ -35,7 +35,9 @@ rows.
 
 To prove the check can still fail, run `scripts/mutants.ts` the same way. It needs a clean `src/`.
 It applies 32 real breakages one at a time and restores each file. Every line must read
-`CAUGHT`. It then confirms the baseline passes and `src/` is clean.
+`CAUGHT`. It then confirms the baseline passes and `src/` is clean. It runs the check at depth 4,
+the minimum that catches every mutant: a copy that reads the food's current calories shows only
+after save, log, edit, and copy.
 
 ## Properties
 

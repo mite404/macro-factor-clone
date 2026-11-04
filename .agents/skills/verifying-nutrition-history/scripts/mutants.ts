@@ -247,7 +247,8 @@ const mutants: Mutant[] = [
   },
 ];
 
-const runCheck = () => spawnSync(process.execPath, ['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', check], { cwd: root, encoding: 'utf8' });
+// Pinned: the copy-reads-current-calories mutant needs 4 ops (save, log, edit, copy) to show.
+const runCheck = () => spawnSync(process.execPath, ['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', check, '--depth', '4'], { cwd: root, encoding: 'utf8' });
 
 function main() {
   if (execFileSync('git', ['status', '--porcelain', '--', 'src'], { cwd: root, encoding: 'utf8' }) !== '') {
