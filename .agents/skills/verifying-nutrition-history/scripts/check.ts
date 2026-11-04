@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
 
 import { exportBackup, parseBackup, restoreBackup, type Backup } from '../../../../src/features/backup/backup.ts';
-import { deleteEntry, insertEntry, listEntries, parseEntryForm, updateEntry, type Entry } from '../../../../src/features/diary/diary.ts';
+import { deleteEntry, insertEntry, listEntries, localDay, parseEntryForm, updateEntry, type Entry } from '../../../../src/features/diary/diary.ts';
 import {
   archiveFood,
   insertFood,
@@ -16,11 +16,13 @@ import {
   parseFoodForm,
   searchFoods,
   updateFood,
+  parseGtin,
   type Food,
   type FoodForm,
   type Provenance,
 } from '../../../../src/features/foods/foods.ts';
 import { loadTargets, parseTargets, saveTargets, type Targets } from '../../../../src/features/goals/goals.ts';
+import { lookupBarcode, parseUsdaSearch } from '../../../../src/features/lookup/lookup.ts';
 import { migrate, migrations, type Db } from '../../../../src/storage/migrations.ts';
 import { openTestDb } from '../../../../src/storage/testDb.ts';
 
@@ -72,13 +74,37 @@ const OAT_MILK: Template = {
   serving: null,
   barcode: '012345678905',
 };
+// A USDA import: the decoy ranks first but has another GTIN; the match lists no fat, so fat is unknown.
+const KARS: Template = {
+  form: { ...blank, name: "NUT 'N BERRY MIX", basis: 'g', calories: '500', protein: '14.3', carbs: '42.9', servingName: '1 ONZ', servingAmount: '28', barcode: '0077034085228' },
+  per100: { calories: 500, protein: 14.3, carbs: 42.9, fat: null },
+  serving: { name: '1 ONZ', amount: 28 },
+  barcode: '0077034085228', // as typed, though USDA's record says 077034085228
+};
+const KARS_GTIN = '00077034085228';
+const KARS_TYPED = '0077034085228';
+const TODAY = localDay();
+const KARS_PROVENANCE: Provenance = { brand: "KAR'S", source: { id: 'fdc:2105222', name: 'USDA FoodData Central', retrievedOn: TODAY } };
+const MANUAL: Provenance = { brand: null, source: null };
+const USDA_REPLY = {
+  foods: [
+    { fdcId: 1, gtinUpc: '012345678905', description: 'Decoy', servingSizeUnit: 'g', foodNutrients: [{ nutrientId: 1008, unitName: 'KCAL', value: 1 }] },
+    {
+      fdcId: 2105222, gtinUpc: '077034085228', description: "NUT 'N BERRY MIX", brandName: "KAR'S", brandOwner: 'Kar Nut Products Company',
+      servingSize: 28, servingSizeUnit: 'g', householdServingFullText: '1 ONZ',
+      foodNutrients: [
+        { nutrientId: 1008, unitName: 'KCAL', value: 500 }, { nutrientId: 1003, unitName: 'G', value: 14.3 },
+        { nutrientId: 1005, unitName: 'G', value: 42.9 }, { nutrientId: 1093, unitName: 'MG', value: 0 },
+      ],
+    },
+  ],
+};
 const RICE: Template = {
   form: { ...blank, name: 'Rice', basis: 'g', calories: '130', protein: '2.7', carbs: '28', fat: '0.3', servingName: 'bowl', servingAmount: '185' },
   per100: { calories: 130, protein: 2.7, carbs: 28, fat: 0.3 },
   serving: { name: 'bowl', amount: 185 },
   barcode: null,
 };
-const MANUAL: Provenance = { brand: null, source: null };
 const CORRECTION = { label: ' Fixed ', calories: '200', protein: '', carbs: '0', fat: '3,5' };
 const CORRECTED = { label: 'Fixed', calories: 200, protein: null, carbs: 0, fat: 3.5 };
 // Target forms as typed, and the one current set each must leave. Blank means no target.
@@ -119,6 +145,14 @@ const log = (i: 0 | 1, quantity: number, unit: 'g' | 'ml' | 'serving') => (s: St
 const ops: Op[] = [
   { name: 'save0', slot: 0, words: 'save Oats (per 100 g, carbs unknown, fat 0, cup = 40 g, barcode 0036000291452) as food 0', next: save(0, OATS) },
   { name: 'save1', slot: 1, words: 'save Juice (per 100 ml, protein and fat unknown, no serving) as food 1', next: save(1, JUICE) },
+  {
+    name: 'import1', slot: 1, words: `look up ${KARS_TYPED} in a USDA reply ranking a decoy first, and save the exact match as food 1`,
+    next: save(1, KARS, KARS_PROVENANCE),
+  },
+  {
+    name: 'lookup', slot: 1, words: `look up ${KARS_TYPED} again with no key and no network`,
+    next: (s) => ({ ...s, rejected: false }),
+  },
   { name: 'edit0Bar', slot: 0, words: 'edit food 0 to Bar (0 kcal, all macros unknown, bar = 60 g)', next: edit(0, BAR) },
   { name: 'edit0OatMilk', slot: 0, words: 'edit food 0 to Oat milk (basis g → ml, no serving)', next: edit(0, OAT_MILK) },
   { name: 'edit1Rice', slot: 1, words: 'edit food 1 to Rice (basis ml → g, bowl = 185 g)', next: edit(1, RICE) },
@@ -241,6 +275,25 @@ async function failedRestores(db: Db): Promise<void> {
   if (after !== before) fail(`rows changed\n  before ${before}\n  after  ${after}`);
 }
 
+// L1: saved foods with the same GTIN come back with no key read and no request; otherwise the
+// lookup falls through to the key, which is missing here.
+async function compareLookup(db: Db, s: State): Promise<void> {
+  const expected = s.slots
+    .filter((x): x is NonNullable<Slot> => x !== null && !x.archived && x.t.barcode === KARS.barcode)
+    .map((x) => x.id);
+  const network = async (): Promise<Response> => {
+    throw new PropertyFailure({ property: 'L1 saved-barcode-offline', detail: 'the lookup made a request' });
+  };
+  const result = await lookupBarcode(db, KARS_TYPED, async () => {
+    if (expected.length > 0) throw new PropertyFailure({ property: 'L1 saved-barcode-offline', detail: 'the lookup read the key' });
+    return null;
+  }, network);
+  const actual = result.kind === 'saved' ? result.foods.map((f) => f.id) : result.kind;
+  if (!isDeepStrictEqual(actual, expected.length > 0 ? expected : 'missing-key')) {
+    throw new PropertyFailure({ property: 'L1 saved-barcode-offline', detail: `expected ${JSON.stringify(expected)}\n  actual   ${JSON.stringify(result)}` });
+  }
+}
+
 function extraEntry(backup: Backup) {
   const id = Math.max(0, ...backup.diaryEntries.map((e) => e.id)) + 1;
   return { id, day: DAY, label: 'Extra', calories: 1, protein: null, carbs: null, fat: null, foodId: null, amount: null, unit: null };
@@ -268,6 +321,16 @@ async function apply(db: Db, op: Op, before: State, after: State): Promise<boole
     const parsed = parseTargets(op.name === 'setTargets' ? SET_TARGETS : EDIT_TARGETS);
     if ('errors' in parsed) throw new Error(`valid targets rejected: ${JSON.stringify(parsed.errors)}`);
     await saveTargets(db, parsed.targets);
+  } else if (op.name === 'import1') {
+    const code = parseGtin(KARS_TYPED);
+    if (!('gtin' in code) || code.gtin !== KARS_GTIN) throw new Error(`${KARS_TYPED} did not parse to ${KARS_GTIN}`);
+    const reply = parseUsdaSearch(USDA_REPLY, code.gtin, code.digits, TODAY);
+    // Saves the first offered record, so a decoy that slips through shows up as F1.
+    if (reply.kind !== 'usda') throw new Error(`USDA reply parsed as ${JSON.stringify(reply)}`);
+    const id = await insertFood(db, reply.foods[0], reply.foods[0]);
+    if (id !== slot!.id) throw new Error(`insertFood returned id ${id}, expected ${slot!.id}`);
+  } else if (op.name === 'lookup') {
+    await compareLookup(db, before);
   } else if (op.name.startsWith('save')) {
     const id = await insertFood(db, await parsedFood(after.slots[op.slot]!.t));
     if (id !== slot!.id) throw new Error(`insertFood returned id ${id}, expected ${slot!.id}`);
@@ -365,7 +428,7 @@ async function main() {
       }
     }
   }
-  console.log(`PASS H1 H2 H3 H4 F1 F2 F3 T1 B1 X0: ${runs} sequences of 1-${DEPTH} ops from ${ops.length}, 2 start states`);
+  console.log(`PASS H1 H2 H3 H4 F1 F2 F3 T1 L1 B1 X0: ${runs} sequences of 1-${DEPTH} ops from ${ops.length}, 2 start states`);
   console.log(`node ${process.version}, SQLite ${v}, ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 

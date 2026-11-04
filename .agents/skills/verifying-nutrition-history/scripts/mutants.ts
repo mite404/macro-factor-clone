@@ -17,6 +17,7 @@ const diary = 'src/features/diary/diary.ts';
 const storage = 'src/storage/migrations.ts';
 const backup = 'src/features/backup/backup.ts';
 const goals = 'src/features/goals/goals.ts';
+const lookup = 'src/features/lookup/lookup.ts';
 
 const mutants: Mutant[] = [
   {
@@ -144,6 +145,34 @@ const mutants: Mutant[] = [
     file: backup,
     from: "'SELECT nutrient, amount FROM targets ORDER BY nutrient'",
     to: "'SELECT nutrient, amount FROM targets WHERE 0'",
+  },
+  {
+    property: 'F1 food-record-fidelity',
+    why: 'a top-ranked USDA record with another GTIN counts as a match',
+    file: lookup,
+    from: "return 'gtin' in code && code.gtin === gtin;\n  });\n  if (exact.length === 0)",
+    to: "return 'gtin' in code;\n  });\n  if (exact.length === 0)",
+  },
+  {
+    property: 'F1 food-record-fidelity',
+    why: 'restore drops the brand',
+    file: backup,
+    from: 'f.brand, f.sourceId,',
+    to: 'null, f.sourceId,',
+  },
+  {
+    property: 'L1 saved-barcode-offline',
+    why: 'barcode lookup returns archived foods',
+    file: foods,
+    from: 'FROM foods WHERE archived = 0 AND barcode IS NOT NULL',
+    to: 'FROM foods WHERE barcode IS NOT NULL',
+  },
+  {
+    property: 'L1 saved-barcode-offline',
+    why: 'saved barcodes compare as typed digits, so another GTIN length misses',
+    file: foods,
+    from: "return 'gtin' in code && code.gtin === gtin;\n  }).map(toFood);",
+    to: "return row.barcode === gtin;\n  }).map(toFood);",
   },
   {
     property: 'X0 no-error',
