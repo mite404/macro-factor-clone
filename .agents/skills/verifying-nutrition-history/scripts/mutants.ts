@@ -50,6 +50,20 @@ const mutants: Mutant[] = [
     to: '[e.day, e.label, e.calories, e.protein ?? 0, e.carbs ?? 0, e.fat ?? 0,',
   },
   {
+    property: 'H2 unknown-stays-unknown',
+    why: 'copying an entry writes unknown macros as 0',
+    file: diary,
+    from: 'SELECT ?, label, calories, protein, carbs, fat,',
+    to: 'SELECT ?, label, calories, IFNULL(protein, 0), IFNULL(carbs, 0), IFNULL(fat, 0),',
+  },
+  {
+    property: 'H1 history-snapshot',
+    why: 'copying an entry takes its food\'s current calories',
+    file: diary,
+    from: 'SELECT ?, label, calories, protein, carbs, fat, food_id, amount, unit FROM diary_entries\n',
+    to: 'SELECT ?, label, COALESCE((SELECT f.calories * diary_entries.amount / 100 FROM foods f WHERE f.id = food_id), calories), protein, carbs, fat, food_id, amount, unit FROM diary_entries\n',
+  },
+  {
     property: 'H3 portion-unit-and-day',
     why: 'correcting an entry clears its portion',
     file: diary,
