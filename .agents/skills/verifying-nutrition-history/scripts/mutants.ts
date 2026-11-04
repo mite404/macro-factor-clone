@@ -15,6 +15,7 @@ const check = join(here, 'check.ts');
 const foods = 'src/features/foods/foods.ts';
 const diary = 'src/features/diary/diary.ts';
 const storage = 'src/storage/migrations.ts';
+const backup = 'src/features/backup/backup.ts';
 
 const mutants: Mutant[] = [
   {
@@ -79,6 +80,41 @@ const mutants: Mutant[] = [
     file: foods,
     from: 'WHERE archived = 0 AND name LIKE',
     to: 'WHERE name LIKE',
+  },
+  {
+    property: 'F3 archived-food-kept',
+    why: 'a backup leaves out archived foods',
+    file: backup,
+    from: '`SELECT ${foodColumns} FROM foods ORDER BY id`',
+    to: '`SELECT ${foodColumns} FROM foods WHERE archived = 0 ORDER BY id`',
+  },
+  {
+    property: 'H2 unknown-stays-unknown',
+    why: 'restore writes unknown macros as 0',
+    file: backup,
+    from: '[e.id, e.day, e.label, e.calories, e.protein, e.carbs, e.fat,',
+    to: '[e.id, e.day, e.label, e.calories, e.protein ?? 0, e.carbs ?? 0, e.fat ?? 0,',
+  },
+  {
+    property: 'H3 portion-unit-and-day',
+    why: 'restore drops portions',
+    file: backup,
+    from: 'e.foodId, e.amount, e.unit],',
+    to: 'null, null, null],',
+  },
+  {
+    property: 'B1 failed-restore-changes-nothing',
+    why: 'validation accepts an entry for a missing food',
+    file: backup,
+    from: '  if (dangling) return',
+    to: '  if (false) return',
+  },
+  {
+    property: 'B1 failed-restore-changes-nothing',
+    why: 'a failed restore commits its earlier writes',
+    file: backup,
+    from: "    await db.execAsync('ROLLBACK');",
+    to: "    await db.execAsync('COMMIT');",
   },
   {
     property: 'X0 no-error',

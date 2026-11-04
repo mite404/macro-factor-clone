@@ -40,8 +40,8 @@ changes. A paid developer membership is optional for this local workflow, not re
 Native.
 
 Keep the same bundle identifier and Personal Team when renewing. Install over the existing app,
-then confirm the diary data survived. Until backup/restore is implemented and verified, keep only
-disposable test data in this build.
+then confirm the diary data survived. Backup and restore exist (Settings → Backup), but they have
+not passed on a device yet. Until they do, keep only disposable test data in this build.
 
 ## Evidence to record
 
@@ -50,6 +50,11 @@ observed result. Capture camera permission denial, actual scanning, database per
 restart, large text and VoiceOver, keyboard layout, and Files export/restore as those features
 arrive. Native checks remain pending until someone runs them on Apple tooling or the physical
 device.
+
+For backups, check on the iPhone: export and choose Save to Files, then dismiss the share sheet
+without saving; choose a file in Files, then cancel the picker; cancel and confirm a replacement;
+restore a backup after deleting and reinstalling the app. Compare the diary and saved foods with
+the source each time. See [the backup format](backup-format.md).
 
 Sources: [Expo local builds](https://docs.expo.dev/guides/local-app-development/) and
 [Apple account capabilities][apple-account].
