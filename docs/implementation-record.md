@@ -165,8 +165,16 @@ A pre-review by a generic Amp Task subagent, not the required Fable 5.1 xhigh or
 issue. A scanned UPC-E was read as EAN-8, so its check digit failed or it resolved to another GTIN.
 Scans of type `upc_e` now expand to UPC-A first. A Node test covers each rule, the 2/3 boundary, and
 number system 1; the subagent found 0 mismatches against its own expander over all 2,000,000 codes.
-Typed 8-digit codes still read as EAN-8. Its low findings await the owner. The PR was opened ready,
-then returned to draft when main's review gate arrived; the Fable oracle review has not run.
+Typed 8-digit codes still read as EAN-8. The PR was opened ready, then returned to draft when main's
+review gate arrived.
+
+The owner had two of its three low findings fixed. Camera access is off now shows only once access
+is denied, not behind the open iOS prompt. A media reset expo-camera recovers from no longer closes
+the camera, and a failed start no longer claims the device has no camera. iOS gives expo-camera no
+way to report a missing camera, so the Simulator still shows an empty square. Re-reading permission
+after returning from Settings awaits the owner's decision. Stories `BarcodeScanPromptOpen` and
+`BarcodeScanMountErrors` fail with either fix reverted; 41 stories pass. The Fable oracle has not
+run.
 
 ## Ticket 06 oracle corrections are required after shipping
 
