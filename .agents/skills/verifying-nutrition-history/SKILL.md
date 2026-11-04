@@ -2,8 +2,9 @@
 name: verifying-nutrition-history
 description: "Runs a bounded exhaustive check that logged diary nutrition, unknown nutrients,
   portions, imported brands and sources, saved barcodes, recipe snapshots, and the current targets
-  survive food edits, archiving, corrections, deletes, target edits, reopen, migration, and backup
-  restore, against the real foods/diary/goals/backup/lookup/recipes/storage code on real SQLite.
+  survive food edits, archiving, corrections, copies, deletes, target edits, reopen, migration, and
+  backup restore, against the real foods/diary/goals/backup/lookup/recipes/storage code on real
+  SQLite.
   Use when changing src/features/foods/foods.ts, src/features/diary/diary.ts,
   src/features/goals/goals.ts, src/features/backup/backup.ts, src/features/lookup/lookup.ts,
   src/features/recipes/recipes.ts, or src/storage/, or when asked whether diary history stays
@@ -13,7 +14,7 @@ description: "Runs a bounded exhaustive check that logged diary nutrition, unkno
 # Verifying nutrition history
 
 A bounded exhaustive check, not a proof. `scripts/check.ts` enumerates every op sequence the UI
-can reach, up to a depth, from 24 ops and 2 start states. It drives the production functions
+can reach, up to a depth, from 25 ops and 2 start states. It drives the production functions
 against Node's built-in SQLite through `src/storage/testDb.ts`. After every step it compares
 `listEntries`, `searchFoods`, the archived food rows, and `loadTargets` with a hand-written spec
 oracle, and a barcode lookup step compares `lookupBarcode` with it too. The oracle
@@ -27,21 +28,24 @@ this checks real code with generated inputs, not a model.
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON .agents/skills/verifying-nutrition-history/scripts/check.ts
 ```
 
-The default depth is 4: 47,346 sequences, about 185 s. Before moving the sync commit, also run
+The default depth is 4: 56,362 sequences, about 160 s. Before moving the sync commit, also run
 `--depth 5`: 609,320 sequences, about 36 min. Exit 0 prints `PASS`. Exit 1 prints
 `FAIL <property>` with a shortest counterexample as numbered steps and the expected and actual
 rows.
 
 To prove the check can still fail, run `scripts/mutants.ts` the same way. It needs a clean `src/`.
-It applies 30 real breakages one at a time and restores each file. Every line must read
-`CAUGHT`. It then confirms the baseline passes and `src/` is clean.
+It applies 32 real breakages one at a time and restores each file. Every line must read
+`CAUGHT`. It then confirms the baseline passes and `src/` is clean. It runs the check at depth 4,
+the minimum that catches every mutant: a copy that reads the food's current calories shows only
+after save, log, edit, and copy.
 
 ## Properties
 
 The harm in every case is a diary that silently changes or misreports what the owner ate.
 
 - **H1 history-snapshot.** A logged entry keeps its label and nutrition until the owner corrects or
-  deletes it. Food edits, archiving, other entries, reopening, migration, and restoring a backup of
+  deletes it. A copy repeats the stored snapshot and portion, never the food's current values.
+  Food edits, archiving, other entries, reopening, migration, and restoring a backup of
   the same data never change it.
 - **H2 unknown-stays-unknown.** An unknown nutrient (`null`) stays unknown through logging,
   storage, correction, and reopen. A known 0 stays 0.
@@ -82,7 +86,8 @@ The harm in every case is a diary that silently changes or misreports what the o
   Rice (ml → g),
   archive either food, make recipe Stew from 200 g of food 0 when it is per 100 g, log 75 g of
   Stew, five logs (g, ml, and serving, including rejected ones), correct the first
-  entry, delete the first entry, set targets (2000 kcal and 100 g protein), edit targets
+  entry, copy the first and last entries to the same day with `copyEntries`, delete the first
+  entry, set targets (2000 kcal and 100 g protein), edit targets
   (calories blank, protein 120 g, fat 62,5 g), close/reopen/migrate, `restore` (export,
   `JSON.stringify`, `parseBackup`, `restoreBackup` into a new database file, then use it), and
   `failedRestores`.
@@ -113,6 +118,8 @@ The harm in every case is a diary that silently changes or misreports what the o
   covers it, and the Storybook stories render it.
 - expo-sqlite, expo-file-system, expo-document-picker, and expo-sharing on iOS. Node's SQLite stands
   in for SQLite here, and no file leaves the process.
+- Copies to another day, a failed copy batch, and the copy screen's one-batch lock.
+  `src/features/diary/diary.test.ts` and the `CopyEntriesToToday` story cover those.
 - `dayTotals`, `addDays`, `localDay`, multiple days, timezones, search queries other than `''`,
   other quantities and values, and concurrency.
 - Weigh-ins and the weight unit. No op writes them, so `restore` round-trips none. They hold no
@@ -132,7 +139,7 @@ Node ≥ 22.18.
 
 | Check            | Covered code                                                              |
 | ---------------- | ------------------------------------------------------------------------- |
-| H1, H3           | `foods.ts` `logPortion`, `updateFood`, `archiveFood`; `diary.ts` `insertEntry`, `updateEntry`, `deleteEntry`, `listEntries` |
+| H1, H3           | `foods.ts` `logPortion`, `updateFood`, `archiveFood`; `diary.ts` `insertEntry`, `updateEntry`, `copyEntries`, `deleteEntry`, `listEntries` |
 | H2               | `foods.ts` `scale`, `parseFoodForm`; `diary.ts` `parseAmount`, `parseNutrition`, `parseEntryForm`, `insertEntry`, `listEntries` |
 | H4               | `foods.ts` `logPortion`                                                   |
 | F1, F2           | `foods.ts` `parseFoodForm`, `values`, `insertFood`, `updateFood`, `searchFoods`, `toFood`, `archiveFood`; `lookup.ts` `parseUsdaSearch`, `parseOffProduct` |

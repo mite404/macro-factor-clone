@@ -36,7 +36,7 @@ there or the story fails with a missing method.
   starts it as the declared `storybook` service.
 - `npm run build-storybook` writes a static build to the ignored `storybook-static/` folder. It
   needs no cross-origin isolation headers, so any static file server can host it.
-- `npm run test:storybook` opens all 49 stories at 390 × 844 px and fails unless its play function
+- `npm run test:storybook` opens all 50 stories at 390 × 844 px and fails unless its play function
   finishes without browser or console errors. Set `STORYBOOK_URL` to test another origin, such as a
   static build.
 
@@ -80,6 +80,7 @@ adds dependencies and needs the owner's approval.
 | `RecipeBuildAndLog` | 0 g and empty recipes rejected, ml food refused, draft kept across picks, 150 g of 600 g = 225 kcal, fat unknown |
 | `RecipeEditKeepsHistory` | Removing an ingredient and reweighing changes the next portion, not the one already logged |
 | `RecipeManyIngredientsScrolls` | Ten ingredients keep the draft, and the last one scrolls clear of Save |
+| `CopyEntriesToToday` | Cancel adds nothing; 2 of 3 entries (580 kcal) copied to a 120 kcal day make 700; three taps make one batch |
 | `WeightEmpty` | No weigh-ins shows no average or chart; 0 kg rejected; one weigh-in reads as one sample |
 | `WeightTrendAddEditDelete` | 80 and 82 kg six days apart average 81; a day-8 84 kg averages 83; edit to 86, then delete |
 | `WeightReplaceAndPounds` | A second weigh-in today warns and replaces; 100 lb shows as 45.4 kg; an earlier day adds |
