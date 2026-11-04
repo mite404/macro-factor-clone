@@ -168,13 +168,14 @@ number system 1; the subagent found 0 mismatches against its own expander over a
 Typed 8-digit codes still read as EAN-8. The PR was opened ready, then returned to draft when main's
 review gate arrived.
 
-The owner had two of its three low findings fixed. Camera access is off now shows only once access
+The owner had all three of its low findings fixed. Camera access is off now shows only once access
 is denied, not behind the open iOS prompt. A media reset expo-camera recovers from no longer closes
 the camera, and a failed start no longer claims the device has no camera. iOS gives expo-camera no
-way to report a missing camera, so the Simulator still shows an empty square. Re-reading permission
-after returning from Settings awaits the owner's decision. Stories `BarcodeScanPromptOpen` and
-`BarcodeScanMountErrors` fail with either fix reverted; 41 stories pass. The Fable oracle has not
-run.
+way to report a missing camera, so the Simulator still shows an empty square. Returning to the app,
+for example from Settings, re-reads camera permission. `BarcodeScanPromptOpen`,
+`BarcodeScanMountErrors`, and `BarcodeScanDeniedTypeUnknown` each fail with its fix reverted; 41
+stories pass. Fable 5.1 xhigh oracle review started on `4924f9c` in [its thread][t07-review]; the
+re-read came after that head.
 
 ## Ticket 06 oracle corrections are required after shipping
 
@@ -548,6 +549,7 @@ No merges are authorized by this record. No native build has been verified by th
 [history-thread]: https://ampcode.com/threads/T-01a1a39d-c369-77ac-9a80-b1993d5d057a
 [ci-thread]: https://ampcode.com/threads/T-118f58c0-7f55-46e6-9d1f-83d662f2b3dc
 [t07-thread]: https://ampcode.com/threads/T-4bd49a1c-f754-4a63-8218-563690c638dd
+[t07-review]: https://ampcode.com/threads/T-4f9e25ad-9fd5-4eb6-89fe-07f62a8955c1
 [backup-thread]: https://ampcode.com/threads/T-92446160-d0c9-4113-8d29-e772c221d832
 [targets-thread]: https://ampcode.com/threads/T-726bca15-3a60-4507-a2a7-e12b1b49595e
 [lookup-thread]: https://ampcode.com/threads/T-68986624-b1ed-44fc-be7b-6ae0d6bed2eb
