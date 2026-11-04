@@ -113,7 +113,7 @@ The harm in every case is a diary that silently changes or misreports what the o
 
 ## Coverage record
 
-Sync commit: `8232d0c6c7698631cf2cb464e4ed4b07518f5a5e`. Tools: Node v26.12.1 with built-in
+Sync commit: `5e4c8f29de43d1d6b051ff8db918e0a0b08eb993`. Tools: Node v26.12.1 with built-in
 `node:sqlite` (SQLite 3.54.0), running `.ts` files by type stripping. The repo requires
 Node ≥ 22.18.
 
@@ -134,7 +134,7 @@ Node ≥ 22.18.
 1. Find out whether a change touches covered code:
 
    ```sh
-   git diff --stat 8232d0c6c7698631cf2cb464e4ed4b07518f5a5e -- \
+   git diff --stat 5e4c8f29de43d1d6b051ff8db918e0a0b08eb993 -- \
      src/features/foods/foods.ts src/features/diary/diary.ts src/features/goals/goals.ts \
      src/features/backup/backup.ts src/features/lookup/lookup.ts src/storage/
    ```
