@@ -25,9 +25,10 @@ database once on mount, as expo-sqlite's provider does, so `exhaustive-deps` is 
 
 `tsconfig.json` includes `.agents/**/*`, so typecheck covers the invariant scripts CI runs.
 
-`.github/workflows/ci.yml` runs on pull requests, pushes to `orb-setup` and `main`, and manual
-dispatch. A newer push to the same ref cancels the older run. Each job runs `npm ci` with the npm
-cache keyed by `package-lock.json`:
+`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch.
+Product and CI work targets `main`; `orb-setup` holds only orb setup script changes. A newer
+push to the same ref cancels the older run. Each job runs `npm ci` with the npm cache keyed by
+`package-lock.json`:
 
 | Job | Command | Proves |
 | --- | --- | --- |
