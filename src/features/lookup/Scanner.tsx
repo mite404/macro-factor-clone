@@ -1,13 +1,14 @@
 // The Barcode tab's camera. It runs only while mounted: the tab unmounts it when a scan lands, on
-// Cancel, and on leaving the tab. iOS itself suspends the capture session in the background and
-// resumes it on return, so a closed scanner never restarts. Frames are read, never stored.
+// Cancel, and on leaving the tab. expo-camera stops the session in the background and restarts it
+// on return, so a closed scanner never restarts. Frames are read, never stored.
 import { CameraView, useCameraPermissions, type BarcodeType } from 'expo-camera';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Linking, View } from 'react-native';
 
 import { Button, Label, Row, usePalette } from '../../ui';
+import { expandUpcE } from '../foods/foods';
 
-// Package barcodes only; iOS reports UPC-A as a 13-digit EAN with a leading 0, which parseGtin accepts.
+// Package barcodes only. expo-camera reports UPC-A as 12 digits and UPC-E as 8 compressed ones.
 const BARCODE_TYPES: BarcodeType[] = ['ean13', 'ean8', 'upc_a', 'upc_e'];
 
 function Message({ title, text, children }: { title: string; text: string; children?: ReactNode }) {
@@ -50,10 +51,10 @@ export function Scanner({ onScan, onCancel }: { onScan: (code: string) => void; 
     <View style={{ aspectRatio: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: p.field }}>
       {permission?.granted ? <CameraView style={{ flex: 1 }} facing="back" accessibilityLabel="Barcode camera"
         barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }} onMountError={() => setFailed(true)}
-        onBarcodeScanned={({ data }) => {
+        onBarcodeScanned={({ type, data }) => {
           if (scanned.current) return;
           scanned.current = true;
-          onScan(data);
+          onScan(type === 'upc_e' ? expandUpcE(data) : data);
         }} /> : null}
     </View>
     <Row style={{ gap: 8 }}>
