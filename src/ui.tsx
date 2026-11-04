@@ -99,22 +99,32 @@ export function Field({ label, a11y, value, onChangeText, suffix, placeholder, e
   </View>;
 }
 
-/** Source-shaped nutrient summary with text labels independent of color. Bars need real targets. */
-export function Macros({ values, targets, label }: {
-  values: readonly string[]; targets?: readonly string[]; label?: string;
+/**
+ * Source-shaped nutrient summary with text labels independent of color. A nutrient with a target
+ * shows "of" it and a bar filled to `fills[i]` (0-1), drawn in the danger color when `over[i]`; a
+ * null target reads "no target". Reference studies omit `fills` and draw their source's static bar.
+ */
+export function Macros({ values, targets, fills, over, label }: {
+  values: readonly string[]; targets?: readonly (string | null)[]; fills?: readonly number[];
+  over?: readonly boolean[]; label?: string;
 }) {
   const p = usePalette();
   const names = ['Calories', 'Protein', 'Fat', 'Carbs'];
   const tint = [colors.calories, colors.protein, colors.fat, colors.carbs];
   return <View accessible={label !== undefined} accessibilityLabel={label}
-    style={[styles.row, { justifyContent: 'space-between', gap: 12 }]}>
+    style={[styles.row, { justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }]}>
     {names.map((name, i) => <View key={name} style={{ flex: 1, gap: 4 }}>
       <Label size={11} muted>{name}</Label>
-      <Label size={i === 0 ? 24 : 20} weight="500">{values[i]}</Label>
-      {targets ? <><Label size={10} muted>of {targets[i]}</Label>
+      {/* One line height for every value, so bars line up under the larger calorie figure. Large system text
+          shrinks a figure to fit its column on iOS instead of breaking it between digits. */}
+      <Label size={i === 0 ? 24 : 20} weight="500" style={{ lineHeight: 32 }} numberOfLines={1} adjustsFontSizeToFit
+        minimumFontScale={0.5}>{values[i]}</Label>
+      {targets?.[i] ? <><Label size={10} muted>of {targets[i]}</Label>
         <View style={{ height: 3, backgroundColor: p.field, marginTop: 5 }}>
-          <View style={{ height: 3, width: '74%', backgroundColor: tint[i] }} />
-        </View></> : <View style={{ height: 3, width: 16, backgroundColor: tint[i], marginTop: 5 }} />}
+          <View style={{ height: 3, width: fills ? `${fills[i] * 100}%` : '74%',
+            backgroundColor: over?.[i] ? p.danger : tint[i] }} />
+        </View></> : <>{targets ? <Label size={10} muted>no target</Label> : null}
+          <View style={{ height: 3, width: 16, backgroundColor: tint[i], marginTop: 5 }} /></>}
     </View>)}
   </View>;
 }

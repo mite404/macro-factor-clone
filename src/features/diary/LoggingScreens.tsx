@@ -6,6 +6,7 @@ import { Pressable, TextInput, View } from 'react-native';
 
 import { Button, Card, Field, Label, Macros, palettes, Phone, Row, SearchBar, Segments, usePalette } from '../../ui';
 import type { Food, FoodForm, FoodFormErrors } from '../foods/foods';
+import { compareTargets, NUTRIENTS, type TargetRow, type Targets } from '../goals/goals';
 import { addDays, dayTotals, localDay, parseAmount, type Entry, type EntryForm, type FormErrors, type MacroTotal, type Nutrition, type Portion, type Unit } from './diary';
 
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -116,11 +117,40 @@ function Chevron({ children, label, onPress }: { children: string; label: string
   </Pressable>;
 }
 
-function TimelineBody({ day, entries, onDay, onEntry, onSettings }: {
-  day: string; entries: Entry[]; onDay: (day: string) => void; onEntry: (entry: Entry) => void; onSettings: () => void;
+// The one current target set, compared with the day shown. Status is text, never color alone.
+function TargetsCard({ rows, onTargets }: { rows: TargetRow[]; onTargets: () => void }) {
+  const p = usePalette();
+  if (rows.length === 0) return <Row style={{ gap: 12, justifyContent: 'space-between' }}>
+    <Label size={12} muted style={{ flex: 1 }}>No daily targets set. Intake is shown without a goal.</Label>
+    <Button onPress={onTargets}>Set targets</Button>
+  </Row>;
+  return <View style={{ gap: 10 }}>
+    <Row style={{ gap: 12 }}>
+      <View style={{ flex: 1 }}><Label weight="600">Current targets</Label>
+        <Label size={11} muted>Your targets now, compared with this day</Label></View>
+      <Button label="Edit targets" onPress={onTargets}>Edit</Button>
+    </Row>
+    <Card style={{ paddingVertical: 4, gap: 0 }}>
+      {rows.map((row, i) => <Row key={row.nutrient} style={{ gap: 12, alignItems: 'flex-start', paddingVertical: 10,
+        borderTopWidth: i === 0 ? 0 : 1, borderColor: p.border }}>
+        <View style={{ flex: 1, gap: 4 }}><Label size={13}>{row.name}</Label>
+          <Label size={11} muted>{row.amount}</Label></View>
+        <Label size={12} style={{ flex: 1.4, textAlign: 'right', color: row.over ? p.danger : row.incomplete ? p.warning : p.text }}>
+          {row.status}
+        </Label>
+      </Row>)}
+    </Card>
+  </View>;
+}
+
+function TimelineBody({ day, entries, targets, onDay, onEntry, onSettings, onTargets }: {
+  day: string; entries: Entry[]; targets: Targets; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
+  onSettings: () => void; onTargets: () => void;
 }) {
   const p = usePalette();
   const totals = dayTotals(entries);
+  const rows = compareTargets(targets, totals, entries.length);
+  const row = (key: string) => rows.find(r => r.nutrient === key);
   const today = localDay();
   const [y, m, d] = day.split('-').map(Number);
   const monday = addDays(day, -((new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7));
@@ -152,12 +182,17 @@ function TimelineBody({ day, entries, onDay, onEntry, onSettings }: {
       </Pressable>)}
     </Row>
     {day !== today ? <Button onPress={() => onDay(today)} style={{ alignSelf: 'center' }}>Go to today</Button> : null}
-    <Macros values={values} label={[`Total ${round(totals.calories)} kilocalories`,
+    <Macros values={values} targets={rows.length === 0 ? undefined : NUTRIENTS.map(([key, , unit]) => {
+      const target = targets[key];
+      return target === undefined ? null : `${round(target)}${unit === 'g' ? ' g' : ''}`;
+    })} fills={NUTRIENTS.map(([key]) => row(key)?.fill ?? 0)} over={NUTRIENTS.map(([key]) => row(key)?.over ?? false)}
+    label={[`Total ${round(totals.calories)} kilocalories`,
       ...['protein', 'fat', 'carbs'].map((name, i) => `${name} ${spoken[i]}`),
       incomplete > 0 ? 'macro totals incomplete' : ''].filter(Boolean).join(', ')} />
     {incomplete > 0 ? <Label size={12} style={{ color: p.warning }}>
       Macro totals incomplete: {incomplete} {incomplete === 1 ? 'entry has' : 'entries have'} unknown macros.
     </Label> : null}
+    <TargetsCard rows={rows} onTargets={onTargets} />
     {entries.length === 0 ? <Label muted style={{ textAlign: 'center', paddingVertical: 24 }}>No entries for this day yet.</Label> : null}
     {entries.map(e => <Pressable key={e.id} accessibilityRole="button"
       accessibilityLabel={`${e.label}, ${e.portion ? `${portionText(e.portion)}, ` : ''}${round(e.calories)} kilocalories, protein ${grams(e.protein)}, carbs ${grams(e.carbs)}, fat ${grams(e.fat)} grams`}
@@ -178,13 +213,14 @@ function LogFooter({ onSearch, onQuickAdd }: { onSearch: () => void; onQuickAdd:
   </View>;
 }
 
-/** The day's food log: day picker, macro totals, and entries; search opens the logger. */
-export function FoodLog({ day, entries, onDay, onEntry, onSearch, onQuickAdd, onSettings }: {
-  day: string; entries: Entry[]; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
-  onSearch: () => void; onQuickAdd: () => void; onSettings: () => void;
+/** The day's food log: day picker, totals against the current targets, and entries; search opens the logger. */
+export function FoodLog({ day, entries, targets, onDay, onEntry, onSearch, onQuickAdd, onSettings, onTargets }: {
+  day: string; entries: Entry[]; targets: Targets; onDay: (day: string) => void; onEntry: (entry: Entry) => void;
+  onSearch: () => void; onQuickAdd: () => void; onSettings: () => void; onTargets: () => void;
 }) {
   return <Phone dark footer={<LogFooter onSearch={onSearch} onQuickAdd={onQuickAdd} />}>
-    <TimelineBody day={day} entries={entries} onDay={onDay} onEntry={onEntry} onSettings={onSettings} />
+    <TimelineBody day={day} entries={entries} targets={targets} onDay={onDay} onEntry={onEntry} onSettings={onSettings}
+      onTargets={onTargets} />
   </Phone>;
 }
 
