@@ -731,7 +731,7 @@ export const BarcodeOffLargeText: Story = {
     await lookUp(canvas, '3017620422003');
     await expect(await canvas.findByText('Not in your saved foods. Open Food Facts has one product with exactly this barcode. Open it to check the nutrition before saving.')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: nutellaRow }));
-    await expect(await canvas.findByText('Open Food Facts lists no protein or fat or carbs. It stays unknown in your log, not 0.')).toBeVisible();
+    await expect(await canvas.findByText('No usable protein or fat or carbs in the selected nutrition record. It stays unknown in your log, not 0.')).toBeVisible();
     await expect(canvas.getByText('Per 100 g: 539 kcal · P ? · C ? · F ? g')).toBeVisible();
     enlargeText(canvasElement);
     await waitFor(() => {
