@@ -210,7 +210,16 @@ stories plus both size checks with `app--recipe-edit-keeps-history` excluded. Th
 November 5, 2026 at `b5314d8` and with the correction: "Found multiple elements with the role
 button". `backup-v5.json` holds a Trail oats entry dated 2026-11-05, and the story seeds the same
 entry on today's date. This is a date-dependent fixture on main since `9d975c0`, not part of this
-PR, and CI runs this suite. The fix and its location await the owner. The correction awaits the
+PR, and CI runs this suite.
+
+The reviewer's recheck of `f60407a` approved the corrections and raised one docs-only low: the
+size-check paragraph above describes the first fix in the present tense. That low awaits the owner.
+The owner, as relayed by the reviewer thread, chose to fix the fixture collision in this PR. The
+Trail oats entry, id 11, in `backup-v4.json` and `backup-v5.json` now falls on 2026-11-03, and
+`backup.test.ts` reads it from that day. No fixture diary entry falls on today or later, so a
+story's `localDay()` seed cannot duplicate one. On November 5, `npm test` passed 49 of 49 and the
+unmodified `npm run test:storybook` passed 50 stories plus both size checks. The depth-4 nutrition
+check passed 56,362 sequences. The fix awaits the
 reviewer's recheck, and the PR stays draft until it passes.
 
 ## Tickets 09 and 10 merge facts
