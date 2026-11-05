@@ -155,8 +155,9 @@ The owner saw that resizing Storybook reflowed the app and that TargetsLargeText
 than other previews. The App decorator used `height: 100vh` with no width limit, inside the
 fullscreen layout. Reproduced in this orb: at 1280 × 900 and 320 × 700 windows, EmptyDiary and
 TargetsLargeText both rendered the screen at the full window size. The decorator now gives a
-centered screen up to 390 CSS px wide and 844 px high that narrows below 390 px. Content scrolls
-inside it. Storybook only. The production app, `src/`, and live stories keep no device frame.
+centered screen up to 390 CSS px wide and 844 px high. It narrows below 390 px and shortens to the
+window height below 844 px. Content scrolls inside it. Storybook only. The production app, `src/`,
+and live stories keep no device frame.
 
 `test:storybook` now opens both stories at 1280 × 900, then resizes to 320 × 700 and back. It
 requires a centered `min(390, page width)` × 844 screen. On the old wrapper it failed with
@@ -178,11 +179,39 @@ Observed in this orb, at head `58e6106` before this record:
   scroll recording were inspected. The list scrolls inside the screen while the footer stays put.
   The recorder keeps a 1280 × 900 frame, so narrow widths look stretched in the video only.
 
-In Storybook's manager, the preview pane is shorter than 844 px, so the iframe scrolls. The
-references behave the same way. At 320 px with 1.5× text, "240 of 250 g" wraps its unit. The same
-wrap happened before this change, and it is production layout. Untested: native iOS. Oracle review
-is pending. The coordinator asked for no new thread, so this thread did not start the Fable
-reviewer. The PR stays draft until review.
+At 320 px with 1.5× text, "240 of 250 g" wraps its unit. The same wrap happened before this change,
+and it is production layout outside this PR's scope. Untested: native iOS.
+
+### Review of PR #15
+
+At the coordinator's request, this thread started [the Fable 5.1 reviewer][t15-review] with
+`external-agent:claude-code` and features `model:claude-fable-5-1` and `effort:xhigh`. It reported
+the model ID `claude-fable-5-1`. The xhigh effort was not observable from inside the run. It
+reviewed base `9d975c0` and head `b5314d8`: approve, no high or medium findings, and three lows.
+
+1. A fixed 844 px screen in a shorter window made the web safe-area provider pad the bottom by the
+   overflow. At 320 × 700 the footer sat 144 px above the screen's bottom edge. The earlier claim
+   that the footer stays put held only for windows at least 844 px tall.
+2. The size check could not tell `height: 844` from `min-height: 844`.
+3. This record still said the reviewer had not started.
+
+The owner chose to fix all three, as relayed by the reviewer thread. The decorator height is now
+`min(844px, 100vh)`. `App` renders its own `SafeAreaProvider`, so a decorator cannot zero the inset
+from outside. The size check now requires the screen height to be `min(844, window height)` with
+no page scroll, and the TargetsLargeText list to scroll inside the screen. The new check failed on
+`b5314d8` at 320 × 700 with `[320, 844, 0, 844]` against `[320, 700, 0, 700]`. A `min-height`
+wrapper failed at 1280 × 900 with a 7,938 px screen. With the fix, at 320 × 700 the screen is
+700 px with no bottom padding, the footer ends 8 px above the window bottom, and the page does not
+scroll. In the manager at 1280 × 900, the preview pane is 560 px tall, so the screen is now 560 px
+tall rather than an 844 px screen inside a scrolling iframe.
+
+Observed in this orb after the correction: typecheck and lint passed. `test:storybook` passed 49
+stories plus both size checks with `app--recipe-edit-keeps-history` excluded. That story fails on
+November 5, 2026 at `b5314d8` and with the correction: "Found multiple elements with the role
+button". `backup-v5.json` holds a Trail oats entry dated 2026-11-05, and the story seeds the same
+entry on today's date. This is a date-dependent fixture on main since `9d975c0`, not part of this
+PR, and CI runs this suite. The fix and its location await the owner. The correction awaits the
+reviewer's recheck, and the PR stays draft until it passes.
 
 ## Tickets 09 and 10 merge facts
 
@@ -644,6 +673,7 @@ No merges are authorized by this record. No native build has been verified by th
 [pr14]: https://github.com/mite404/macro-factor-clone/pull/14
 [pr15]: https://github.com/mite404/macro-factor-clone/pull/15
 [sizing-thread]: https://ampcode.com/threads/T-6fcfccf8-1bea-4c68-bf06-7666fb1b1346
+[t15-review]: https://ampcode.com/threads/T-86681d9d-fab9-466e-a721-b781cdb2a7d1
 [ci07]: https://github.com/mite404/macro-factor-clone/actions/runs/41789295767
 [main06]:
   https://github.com/mite404/macro-factor-clone/commit/4d2c9ca30594542a9161ee4668bbb1a262abd31f
