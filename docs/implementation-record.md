@@ -159,8 +159,9 @@ centered screen up to 390 CSS px wide and 844 px high. It narrows below 390 px a
 window height below 844 px. Content scrolls inside it. Storybook only. The production app, `src/`,
 and live stories keep no device frame.
 
-`test:storybook` now opens both stories at 1280 × 900, then resizes to 320 × 700 and back. It
-requires a centered `min(390, page width)` × 844 screen. On the old wrapper it failed with
+`test:storybook` now opens both stories at 1280 × 900, then resizes to 320 × 700 and back. At
+`58e6106` it required a centered `min(390, page width)` × 844 screen; the review corrections below
+relaxed the height to the window. On the old wrapper it failed with
 `[1280, 900, 0]` against `[390, 844, 445]`. The 390 × 844 pass over all 50 stories is unchanged.
 
 Observed in this orb, at head `58e6106` before this record:
