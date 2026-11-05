@@ -145,7 +145,7 @@ test('the version 4 format restores recipe snapshots, units, yield, and the port
   });
   // The snapshot keeps 370 kcal although the saved food now says 379.
   assert.equal((await searchFoods(db, 'oats'))[0].calories, 379);
-  const [entry] = await listEntries(db, '2026-11-05');
+  const [entry] = await listEntries(db, '2026-11-03');
   assert.deepEqual([entry.label, entry.calories, entry.carbs, { ...entry.portion }], ['Trail oats', 288, null, { foodId: null, amount: 100, unit: 'g' }]);
   assert.equal(summarize(parsed(v4Text)).recipes, 1);
   close();
