@@ -33,20 +33,26 @@ try {
   }
   console.log(`${stories.length} stories rendered at 390 px; all play assertions passed`);
 
-  // The App preview is a 390 × 844 phone, centered, at any window size; narrower windows shrink it.
-  const screen = `(() => { const r = document.querySelector('[data-testid=reference-screen]').getBoundingClientRect();
-    return { page: document.documentElement.clientWidth, left: r.left, width: r.width, height: r.height }; })()`;
+  // The App preview is a centered phone of at most 390 × 844 at any window size. Smaller windows shrink
+  // it, the page never scrolls, and long content scrolls inside the screen instead of growing it.
+  const screen = `(() => { const el = document.querySelector('[data-testid=reference-screen]'); const r = el.getBoundingClientRect();
+    const list = [...el.querySelectorAll('div')].find((div) => ['auto', 'scroll'].includes(getComputedStyle(div).overflowY));
+    const page = document.documentElement;
+    return { page: [page.clientWidth, page.clientHeight, page.scrollHeight], left: r.left, width: r.width, height: r.height,
+      list: [list.clientHeight, list.scrollHeight] }; })()`;
   for (const id of ['app--empty-diary', 'app--targets-large-text']) {
     browser('set', 'viewport', '1280', '900', '2');
     browser('open', `${origin}/iframe.html?id=${id}&viewMode=story`);
     browser('wait', '--fn', done);
     for (const [width, height] of [[1280, 900], [320, 700], [1280, 900]]) {
       browser('set', 'viewport', String(width), String(height), '2');
-      const { page, left, width: w, height: h } = JSON.parse(browser('eval', screen));
-      const expected = Math.min(390, page);
-      assert.deepEqual([w, h, left], [expected, 844, (page - expected) / 2], `${id} at ${width} × ${height}`);
+      const { page: [pageW, pageH, scrollH], left, width: w, height: h, list } = JSON.parse(browser('eval', screen));
+      const [expectedW, expectedH] = [Math.min(390, pageW), Math.min(844, pageH)];
+      const at = `${id} at ${width} × ${height}`;
+      assert.deepEqual([w, h, left, scrollH], [expectedW, expectedH, (pageW - expectedW) / 2, pageH], at);
+      if (id === 'app--targets-large-text') assert(list[1] > list[0], `${at}: list ${list} must scroll inside the screen`);
     }
-    console.log(`PASS ${id} sizes to 390 × 844 at 1280 and 320 px windows`);
+    console.log(`PASS ${id} fits 390 × 844 at 1280 and 320 px windows`);
   }
 } finally {
   browser('close');
